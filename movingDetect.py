@@ -5,6 +5,7 @@ import os
 import base64
 import threading
 import logging
+import requests
 from datetime import datetime
 
 # 设置日志记录
@@ -58,7 +59,7 @@ def notify_by_qq(frame):
     url = 'http://192.168.1.100:2701/send_private_msg'
     response = requests.post(url, json=data, headers={"Content-Type": "application/json"})
     logger.info('Status Code: %s', response.status_code)
-    logger.info('Response: %s', response.json())
+    logger.info('Response: %s', response)
 
 class App:
     def __init__(self):
@@ -66,9 +67,9 @@ class App:
         self.video_dir = './video'
         os.makedirs(self.video_dir, exist_ok=True)
 
-    def start_detect(self):
+    def start_detect(self, onGetFrame, onDetected):
         # 初始化摄像头
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(1)
 
         # 读取第一帧
         ret, frame1 = cap.read()
@@ -112,6 +113,11 @@ class App:
                         notify_task = threading.Thread(target=lambda: notify_by_qq(frame2))
                         notify_task.start()
 
+                        if onDetected is not None:
+                            onDetectedTask = threading.Thread(target=lambda: onDetected(frame2))
+                            onDetectedTask.start()
+
+
                         logger.info(f"录制视频: 变化超过10%: {change_percentage:.2f}%")
                         # 开始录制视频
                         recording = True
@@ -134,7 +140,9 @@ class App:
             gray1 = gray2
 
             # 显示当前帧
-            cv2.imshow("Frame", frame2)
+            if onGetFrame is not None:
+                onGetFrame(frame2)
+            else: cv2.imshow("Frame", frame2)
 
             # 按 'q' 键退出
             if cv2.waitKey(33) & 0xFF == ord('q'):
@@ -148,4 +156,4 @@ class App:
         logger.info("检测结束.")
 
 if __name__ == "__main__":
-    App().start_detect()
+    App().start_detect(None, None)
