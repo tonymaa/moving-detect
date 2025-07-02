@@ -62,6 +62,9 @@ class LockScreen:
         new_width = int(frame_width * scale)
         new_height = int(frame_height * scale)
 
+        # 转换为 RGB
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
         # 调整帧的大小
         frame = cv2.resize(frame, (new_width, new_height))
 
