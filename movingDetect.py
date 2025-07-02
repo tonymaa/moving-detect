@@ -8,6 +8,8 @@ import logging
 import requests
 from datetime import datetime
 
+camera_index = 1
+
 # 设置日志记录
 log_dir = './logs'
 os.makedirs(log_dir, exist_ok=True)
@@ -62,14 +64,15 @@ def notify_by_qq(frame):
     logger.info('Response: %s', response)
 
 class App:
-    def __init__(self):
+    def __init__(self, enable_detect = True):
         # 创建视频保存目录
         self.video_dir = './video'
         os.makedirs(self.video_dir, exist_ok=True)
+        self.enable_detect = enable_detect
 
     def start_detect(self, onGetFrame, onDetected):
         # 初始化摄像头
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(camera_index)
 
         # 读取第一帧
         ret, frame1 = cap.read()
@@ -80,8 +83,8 @@ class App:
         debounce_time = 2  # 例如2秒
         last_alert_time = 0  # 上次打印时间
         recording = False  # 录制状态
-        
-        logger.info("开始检测...")
+
+        if self.enable_detect: logger.info("开始检测...")
         
         while True:
             # 读取下一帧
@@ -90,7 +93,7 @@ class App:
             gray2 = cv2.GaussianBlur(gray2, (21, 21), 0)
 
             # 如果正在录制，则跳过变化检测
-            if not recording:
+            if self.enable_detect and not recording:
                 # 计算帧之间的差异
                 delta = cv2.absdiff(gray1, gray2)
                 thresh = cv2.threshold(delta, 25, 255, cv2.THRESH_BINARY)[1]
@@ -131,7 +134,7 @@ class App:
             # 如果正在录制
             if recording:
                 out.write(frame2)  # 写入当前帧
-                if time.time() - start_time >= 30:  # 录制30秒
+                if time.time() - start_time >= 30 or not self.enable_detect:  # 录制30秒
                     recording = False
                     out.release()  # 释放视频写入对象
                     logger.info(f"视频录制完成: {video_filename}")

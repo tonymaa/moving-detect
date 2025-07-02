@@ -9,6 +9,7 @@ import numpy as np
 
 class LockScreen:
     def __init__(self, master):
+        self.monitor_camera = App()
         self.master = master
         self.master.title("Lock Screen")
         self.is_full_screen = False
@@ -70,6 +71,9 @@ class LockScreen:
         self.screen_saver_btn = tk.Button(bottom_frame, text="开启屏保", command=self.lock)
         self.screen_saver_btn.pack()
 
+        self.toggle_detect_btn = tk.Button(bottom_frame, text= "关闭检测" if self.monitor_camera.enable_detect else "开启检测", command=self.toggle_detect)
+        self.toggle_detect_btn.pack()
+
         self.monitor_label = tk.Label(self.master, width=120, height=120)
 
         self.menu = pystray.Menu(
@@ -80,11 +84,18 @@ class LockScreen:
         self.tray_icon = pystray.Icon("开启屏保", image, menu=self.menu)
         self.start_tary()
 
-        video_stream = threading.Thread(target=lambda: App().start_detect(self.loadFrameToUI, self.onDetect))
+
+        video_stream = threading.Thread(target=lambda: self.monitor_camera.start_detect(self.loadFrameToUI, self.onDetect))
         video_stream.setDaemon(True)
         video_stream.start()
 
-
+    def toggle_detect(self):
+        if self.monitor_camera.enable_detect:
+            self.monitor_camera.enable_detect = False
+            self.toggle_detect_btn.configure(text="开启检测")
+        else:
+            self.monitor_camera.enable_detect = True
+            self.toggle_detect_btn.configure(text="关闭检测")
 
     def onDetect(self, frame):
         if self.is_full_screen:
