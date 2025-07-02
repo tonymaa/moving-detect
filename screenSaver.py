@@ -70,6 +70,7 @@ class LockScreen:
         self.screen_saver_btn = tk.Button(bottom_frame, text="开启屏保", command=self.lock)
         self.screen_saver_btn.pack()
 
+        self.monitor_label = tk.Label(self.master, width=120, height=120)
 
         self.menu = pystray.Menu(
             pystray.MenuItem("屏保", self.lock),
@@ -83,13 +84,22 @@ class LockScreen:
         video_stream.setDaemon(True)
         video_stream.start()
 
+
+
     def onDetect(self, frame):
-        pass
-#         self.video_frame_visible = True
-#         self.video_label.pack(pady=20)  # 显示 Canvas
-#         sleep(5)
-#         self.video_frame_visible = False
-#         self.video_label.pack_forget()
+        if self.is_full_screen:
+            monitor_img = Image.open("monitor.png")  # 替换为你的图片路径
+            monitor_img = monitor_img.resize(
+                (120, 120),
+                Image.LANCZOS  # 使用 LANCZOS 代替 ANTIALIAS
+            )
+            self.monitor_photo = ImageTk.PhotoImage(monitor_img)
+
+            # 创建标签显示背景
+            self.monitor_label = tk.Label(self.master, image=self.monitor_photo, width=120, height=120)
+            self.monitor_label.place(x=30, y=30)
+            sleep(10)
+            self.monitor_label.destroy()
 
 
 
@@ -149,6 +159,7 @@ class LockScreen:
         self.screen_saver_btn.pack()
         self.is_full_screen = False
         self.frame.pack(fill=tk.BOTH, expand=True)
+        self.monitor_label.destroy()
 #         self.master.quit()
 
 if __name__ == "__main__":
