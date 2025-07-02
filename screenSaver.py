@@ -2,7 +2,7 @@ from time import sleep
 import cv2
 import threading
 import tkinter as tk
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageEnhance
 import pystray
 from movingDetect import App
 import numpy as np
@@ -108,8 +108,16 @@ class LockScreen:
 
             # 创建标签显示背景
             self.monitor_label = tk.Label(self.master, image=self.monitor_photo, width=120, height=120)
-            self.monitor_label.place(x=30, y=30)
+            self.monitor_label.place(x=60, y=60)
+
+            # 调整亮度，降低暗度
+            enhancer = ImageEnhance.Brightness(self.background_image)
+            # 0.5 表示降低亮度，1.0 表示原始亮度
+            enhancer_bg_img= ImageTk.PhotoImage(enhancer.enhance(0.5))
+            self.label.configure(image=enhancer_bg_img)
+
             sleep(10)
+            self.label.configure(image=self.background_photo)
             self.monitor_label.destroy()
 
 
