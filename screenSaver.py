@@ -1,3 +1,4 @@
+from time import sleep
 import cv2
 import threading
 import tkinter as tk
@@ -10,7 +11,7 @@ class LockScreen:
     def __init__(self, master):
         self.master = master
         self.master.title("Lock Screen")
-
+        self.video_frame_visible = False
 
         self.master.bind("<Escape>", self.exit_fullscreen)  # 按 Esc 键退出全屏
 
@@ -30,8 +31,27 @@ class LockScreen:
 #         self.message_label = tk.Label(master, text="锁屏界面", font=("Arial", 50), bg="black", fg="white")
 #         self.message_label.pack(pady=20)
         # 创建标签用于显示视频帧
-        self.video_label = tk.Label(master, width=50, height=50)
-        self.video_label.pack(pady=20)
+
+#         root.wm_attributes("-transparentcolor", "snow")
+#         tk.Style().configure("TP.TFrame", background="snow")
+        # root.attributes("-alpha",0.5)
+#         ttk.Style().configure("TP.TFrame", background="")
+
+        # 创建一个 Frame
+        frame = tk.Frame(root, width=200, height=200, bg="snow")
+        frame.pack(expand=True)  # 使用 pack 方法放置 Frame
+
+        # 设置Frame透明度
+#         frame.attributes("-alpha", 0.5)
+
+        # 创建第一个 Label
+        self.video_label = tk.Label(frame, width=50, height=50, bg="gray")  # 添加背景色以便于观察
+        self.video_label.pack(side=tk.LEFT, padx=10, pady=10)  # 水平放置，第一个 Label
+
+        # 创建另一个 Label，显示 "Tony Ma"
+        self.label_tony = tk.Label(frame, text="Tony Ma", font=("Arial", 20))
+        self.label_tony.pack(side=tk.LEFT, padx=10, pady=10)  # 水平放置，第二个 Label
+
 
         self.menu = pystray.Menu(
             pystray.MenuItem("锁屏", self.lock),
@@ -46,10 +66,17 @@ class LockScreen:
         video_stream.start()
 
     def onDetect(self, frame):
-        self.video_label.pack(fill=tk.BOTH, expand=True)  # 显示 Canvas
+        pass
+#         self.video_frame_visible = True
+#         self.video_label.pack(pady=20)  # 显示 Canvas
+#         sleep(5)
+#         self.video_frame_visible = False
+#         self.video_label.pack_forget()
+
 
 
     def loadFrameToUI(self, frame):
+#         if self.video_frame_visible != True: return
         # 获取 Label 的当前大小
         label_width = self.video_label.winfo_width()
         label_height = self.video_label.winfo_height()
