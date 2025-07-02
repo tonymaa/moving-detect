@@ -11,9 +11,23 @@ class LockScreen:
     def __init__(self, master):
         self.master = master
         self.master.title("Lock Screen")
-        self.video_frame_visible = False
+        self.is_full_screen = False
 
         self.master.bind("<Escape>", self.exit_fullscreen)  # 按 Esc 键退出全屏
+
+        window_width = 200
+        window_height = 250
+
+        # 获取屏幕的宽度和高度
+        screen_width = root.winfo_screenwidth()
+        screen_height = root.winfo_screenheight()
+
+        # 计算窗口的 x 和 y 坐标，使其居中
+        x = (screen_width // 2) - (window_width // 2)
+        y = (screen_height // 2) - (window_height // 2)
+
+        # 设置窗口的位置和大小
+        root.geometry(f"{window_width}x{window_height}+{x}+{y}")
 
         # 加载背景图片
         self.background_image = Image.open("img.png")  # 替换为你的图片路径
@@ -38,27 +52,31 @@ class LockScreen:
 #         ttk.Style().configure("TP.TFrame", background="")
 
         # 创建一个 Frame
-        frame = tk.Frame(root, width=200, height=200, bg="snow")
-        frame.pack(expand=True)  # 使用 pack 方法放置 Frame
+        self.frame = tk.Frame(root, width=200, height=200, bg="snow")
+        self.frame.pack(fill=tk.BOTH, expand=True)  # 使用 pack 方法放置 Frame
 
-        # 设置Frame透明度
-#         frame.attributes("-alpha", 0.5)
+        # 创建一个标签，撑满可用空间
+        top_frame = tk.Frame(self.frame)
+        top_frame.pack(fill=tk.BOTH, expand=True)  # 填满并扩展
 
         # 创建第一个 Label
-        self.video_label = tk.Label(frame, width=50, height=50, bg="gray")  # 添加背景色以便于观察
-        self.video_label.pack(side=tk.LEFT, padx=10, pady=10)  # 水平放置，第一个 Label
+        self.video_label = tk.Label(top_frame, height=200)  # 添加背景色以便于观察
+        self.video_label.pack(fill=tk.BOTH, expand=True)  # 水平放置，第一个 Label
 
-        # 创建另一个 Label，显示 "Tony Ma"
-        self.label_tony = tk.Label(frame, text="Tony Ma", font=("Arial", 20))
-        self.label_tony.pack(side=tk.LEFT, padx=10, pady=10)  # 水平放置，第二个 Label
+        # 创建一个固定高度的底部框架
+        bottom_frame = tk.Frame(self.frame, height=50)
+        bottom_frame.pack(fill=tk.X)  # 填满 X 轴
+
+        self.screen_saver_btn = tk.Button(bottom_frame, text="开启屏保", command=self.lock)
+        self.screen_saver_btn.pack()
 
 
         self.menu = pystray.Menu(
-            pystray.MenuItem("锁屏", self.lock),
+            pystray.MenuItem("屏保", self.lock),
         )
         image = Image.open("icon.png")
         self.menu.icon = ImageTk.PhotoImage(image)
-        self.tray_icon = pystray.Icon("锁屏", image, menu=self.menu)
+        self.tray_icon = pystray.Icon("开启屏保", image, menu=self.menu)
         self.start_tary()
 
         video_stream = threading.Thread(target=lambda: App().start_detect(self.loadFrameToUI, self.onDetect))
@@ -76,7 +94,7 @@ class LockScreen:
 
 
     def loadFrameToUI(self, frame):
-#         if self.video_frame_visible != True: return
+        if self.is_full_screen: return
         # 获取 Label 的当前大小
         label_width = self.video_label.winfo_width()
         label_height = self.video_label.winfo_height()
@@ -117,7 +135,9 @@ class LockScreen:
     def lock(self):
         # 全屏
         self.master.attributes("-fullscreen", True)
-
+        self.screen_saver_btn.pack_forget()
+        self.is_full_screen = True
+        self.frame.pack_forget()
 
     def start_tary(self):
         thread = threading.Thread(target=self.tray_icon.run)
@@ -126,6 +146,9 @@ class LockScreen:
 
     def exit_fullscreen(self, event=None):
         self.master.attributes("-fullscreen", False)
+        self.screen_saver_btn.pack()
+        self.is_full_screen = False
+        self.frame.pack(fill=tk.BOTH, expand=True)
 #         self.master.quit()
 
 if __name__ == "__main__":

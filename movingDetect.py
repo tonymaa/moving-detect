@@ -69,7 +69,7 @@ class App:
 
     def start_detect(self, onGetFrame, onDetected):
         # 初始化摄像头
-        cap = cv2.VideoCapture(1)
+        cap = cv2.VideoCapture(0)
 
         # 读取第一帧
         ret, frame1 = cap.read()
