@@ -68,11 +68,11 @@ class LockScreen:
         bottom_frame = tk.Frame(self.frame, height=50)
         bottom_frame.pack(fill=tk.X)  # 填满 X 轴
 
-        self.screen_saver_btn = tk.Button(bottom_frame, text="开启屏保", command=self.lock)
-        self.screen_saver_btn.pack()
-
         self.toggle_detect_btn = tk.Button(bottom_frame, text= "关闭检测" if self.monitor_camera.enable_detect else "开启检测", command=self.toggle_detect)
         self.toggle_detect_btn.pack()
+
+        self.screen_saver_btn = tk.Button(bottom_frame, text="开启屏保", command=self.lock)
+        self.screen_saver_btn.pack()
 
         self.monitor_label = tk.Label(self.master, width=120, height=120)
 
