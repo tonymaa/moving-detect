@@ -6,18 +6,23 @@ from PIL import Image, ImageTk, ImageEnhance
 import pystray
 from movingDetect import App
 import numpy as np
+from enum import Enum
+
+class Mode(Enum):
+    ScreenSaver = 1
+    DarkScreen = 2
 
 class LockScreen:
     def __init__(self, master):
         self.monitor_camera = App()
         self.master = master
         self.master.title("Lock Screen")
-        self.is_full_screen = False
+        self.mode = None
 
         self.master.bind("<Escape>", self.exit_fullscreen)  # 按 Esc 键退出全屏
 
         window_width = 200
-        window_height = 250
+        window_height = 300
 
         # 获取屏幕的宽度和高度
         screen_width = root.winfo_screenwidth()
@@ -53,7 +58,7 @@ class LockScreen:
 #         ttk.Style().configure("TP.TFrame", background="")
 
         # 创建一个 Frame
-        self.frame = tk.Frame(root, width=200, height=200, bg="snow")
+        self.frame = tk.Frame(root, width=200, height=280, bg="snow")
         self.frame.pack(fill=tk.BOTH, expand=True)  # 使用 pack 方法放置 Frame
 
         # 创建一个标签，撑满可用空间
@@ -65,7 +70,7 @@ class LockScreen:
         self.video_label.pack(fill=tk.BOTH, expand=True)  # 水平放置，第一个 Label
 
         # 创建一个固定高度的底部框架
-        bottom_frame = tk.Frame(self.frame, height=50)
+        bottom_frame = tk.Frame(self.frame, height=window_height - 200)
         bottom_frame.pack(fill=tk.X)  # 填满 X 轴
 
         self.toggle_detect_btn = tk.Button(bottom_frame, text= "关闭检测" if self.monitor_camera.enable_detect else "开启检测", command=self.toggle_detect)
@@ -73,6 +78,9 @@ class LockScreen:
 
         self.screen_saver_btn = tk.Button(bottom_frame, text="开启屏保", command=self.lock)
         self.screen_saver_btn.pack()
+
+        self.dark_mode_btn = tk.Button(bottom_frame, text="开启暗屏", command=self.dark_mode)
+        self.dark_mode_btn.pack()
 
         self.monitor_label = tk.Label(self.master, width=120, height=120)
 
@@ -97,8 +105,9 @@ class LockScreen:
             self.monitor_camera.enable_detect = True
             self.toggle_detect_btn.configure(text="关闭检测")
 
+
     def onDetect(self, frame):
-        if self.is_full_screen:
+        def show_monitor_img():
             monitor_img = Image.open("monitor.png")  # 替换为你的图片路径
             monitor_img = monitor_img.resize(
                 (120, 120),
@@ -109,6 +118,10 @@ class LockScreen:
             # 创建标签显示背景
             self.monitor_label = tk.Label(self.master, image=self.monitor_photo, width=120, height=120)
             self.monitor_label.place(x=60, y=60)
+        def hide_monitor_img():
+            self.monitor_label.destroy()
+        if self.mode == Mode.ScreenSaver.name:
+            show_monitor_img()
 
             # 调整亮度，降低暗度
             enhancer = ImageEnhance.Brightness(self.background_image)
@@ -118,12 +131,18 @@ class LockScreen:
 
             sleep(15)
             self.label.configure(image=self.background_photo)
-            self.monitor_label.destroy()
+            hide_monitor_img()
+        elif self.mode == Mode.DarkScreen.name:
+            show_monitor_img()
+            self.label.configure(image=self.background_photo)
+            sleep(15)
+            self.dark_mode()
+            hide_monitor_img()
 
 
 
     def loadFrameToUI(self, frame):
-        if self.is_full_screen: return
+        if self.mode is not None: return
         # 获取 Label 的当前大小
         label_width = self.video_label.winfo_width()
         label_height = self.video_label.winfo_height()
@@ -160,13 +179,22 @@ class LockScreen:
         self.video_label.imgtk = img_tk
         self.video_label.configure(image=img_tk)
 
+    def dark_mode(self):
+        self.mode = Mode.DarkScreen.name
+        self.master.attributes("-fullscreen", True)
+        # 调整亮度，降低暗度
+        enhancer = ImageEnhance.Brightness(self.background_image)
+        # 0.5 表示降低亮度，1.0 表示原始亮度
+        self.enhancer_bg_img= ImageTk.PhotoImage(enhancer.enhance(0))
+        self.label.configure(image=self.enhancer_bg_img)
+        self.frame.pack_forget()
 
     def lock(self):
         # 全屏
         self.master.attributes("-fullscreen", True)
-        self.screen_saver_btn.pack_forget()
-        self.is_full_screen = True
+        self.mode = Mode.ScreenSaver.name
         self.frame.pack_forget()
+
 
     def start_tary(self):
         thread = threading.Thread(target=self.tray_icon.run)
@@ -174,11 +202,15 @@ class LockScreen:
         thread.start()
 
     def exit_fullscreen(self, event=None):
+#         if self.mode = Mode.ScreenSaver.name:
+        # 退出屏保
         self.master.attributes("-fullscreen", False)
-        self.screen_saver_btn.pack()
-        self.is_full_screen = False
+        self.mode = None
         self.frame.pack(fill=tk.BOTH, expand=True)
         self.monitor_label.destroy()
+        self.label.configure(image=self.background_photo)
+#         elif self.mode = Mode.DarkScreen.name:
+        # 退出暗屏
 #         self.master.quit()
 
 if __name__ == "__main__":
