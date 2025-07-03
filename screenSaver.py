@@ -84,13 +84,13 @@ class LockScreen:
 
         self.monitor_label = tk.Label(self.master, width=120, height=120)
 
-        self.menu = pystray.Menu(
-            pystray.MenuItem("屏保", self.lock),
-        )
-        image = Image.open("icon.png")
-        self.menu.icon = ImageTk.PhotoImage(image)
-        self.tray_icon = pystray.Icon("开启屏保", image, menu=self.menu)
-        self.start_tary()
+#         self.menu = pystray.Menu(
+#             pystray.MenuItem("屏保", self.lock),
+#         )
+#         image = Image.open("icon.png")
+#         self.menu.icon = ImageTk.PhotoImage(image)
+#         self.tray_icon = pystray.Icon("开启屏保", image, menu=self.menu)
+#         self.start_tary()
 
 
         video_stream = threading.Thread(target=lambda: self.monitor_camera.start_detect(self.loadFrameToUI, self.onDetect))
