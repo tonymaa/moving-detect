@@ -72,14 +72,14 @@ class LockScreen:
         # 创建一个固定高度的底部框架
         bottom_frame = tk.Frame(self.frame, height=window_height - 200)
         bottom_frame.pack(fill=tk.X)  # 填满 X 轴
-
+        self.monitor_camera.enable_detect = False
         self.toggle_detect_btn = tk.Button(bottom_frame, text= "关闭检测" if self.monitor_camera.enable_detect else "开启检测", command=self.toggle_detect)
         self.toggle_detect_btn.pack()
 
-        self.screen_saver_btn = tk.Button(bottom_frame, text="开启屏保", command=self.lock)
+        self.screen_saver_btn = tk.Button(bottom_frame, text="开启屏保并检测", command=self.lock)
         self.screen_saver_btn.pack()
 
-        self.dark_mode_btn = tk.Button(bottom_frame, text="开启暗屏", command=self.dark_mode)
+        self.dark_mode_btn = tk.Button(bottom_frame, text="开启暗屏并检测", command=self.dark_mode)
         self.dark_mode_btn.pack()
 
         self.monitor_label = tk.Label(self.master, width=120, height=120)
@@ -107,6 +107,7 @@ class LockScreen:
 
 
     def onDetect(self, frame):
+        if not self.monitor_camera.enable_detect: return
         def show_monitor_img():
             monitor_img = Image.open("monitor.png")  # 替换为你的图片路径
             monitor_img = monitor_img.resize(
@@ -130,12 +131,14 @@ class LockScreen:
             self.label.configure(image=enhancer_bg_img)
 
             sleep(15)
+            if not self.monitor_camera.enable_detect: return
             self.label.configure(image=self.background_photo)
             hide_monitor_img()
         elif self.mode == Mode.DarkScreen.name:
             show_monitor_img()
             self.label.configure(image=self.background_photo)
             sleep(15)
+            if not self.monitor_camera.enable_detect: return
             self.dark_mode()
             hide_monitor_img()
 
@@ -180,6 +183,7 @@ class LockScreen:
         self.video_label.configure(image=img_tk)
 
     def dark_mode(self):
+        if not self.monitor_camera.enable_detect: self.toggle_detect()
         self.mode = Mode.DarkScreen.name
         self.master.attributes("-fullscreen", True)
         # 调整亮度，降低暗度
@@ -190,6 +194,7 @@ class LockScreen:
         self.frame.pack_forget()
 
     def lock(self):
+        if not self.monitor_camera.enable_detect: self.toggle_detect()
         # 全屏
         self.master.attributes("-fullscreen", True)
         self.mode = Mode.ScreenSaver.name
@@ -202,6 +207,7 @@ class LockScreen:
         thread.start()
 
     def exit_fullscreen(self, event=None):
+        if self.monitor_camera.enable_detect: self.toggle_detect()
 #         if self.mode = Mode.ScreenSaver.name:
         # 退出屏保
         self.master.attributes("-fullscreen", False)
