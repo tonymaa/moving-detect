@@ -8,7 +8,7 @@ import logging
 import requests
 from datetime import datetime
 
-camera_index = 1
+camera_index = 0
 
 # 设置日志记录
 log_dir = './logs'
