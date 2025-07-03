@@ -116,7 +116,7 @@ class LockScreen:
             enhancer_bg_img= ImageTk.PhotoImage(enhancer.enhance(0.5))
             self.label.configure(image=enhancer_bg_img)
 
-            sleep(10)
+            sleep(15)
             self.label.configure(image=self.background_photo)
             self.monitor_label.destroy()
 

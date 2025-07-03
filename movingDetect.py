@@ -134,7 +134,7 @@ class App:
             # 如果正在录制
             if recording:
                 out.write(frame2)  # 写入当前帧
-                if time.time() - start_time >= 30 or not self.enable_detect:  # 录制30秒
+                if time.time() - start_time >= 15 or not self.enable_detect:  # 录制30秒
                     recording = False
                     out.release()  # 释放视频写入对象
                     logger.info(f"视频录制完成: {video_filename}")
