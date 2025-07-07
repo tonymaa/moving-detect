@@ -186,6 +186,7 @@ class LockScreen:
         if not self.monitor_camera.enable_detect: self.toggle_detect()
         self.mode = Mode.DarkScreen.name
         self.master.attributes("-fullscreen", True)
+        self.master.attributes("-topmost", True)
         # 调整亮度，降低暗度
         enhancer = ImageEnhance.Brightness(self.background_image)
         # 0.5 表示降低亮度，1.0 表示原始亮度
@@ -197,6 +198,7 @@ class LockScreen:
         if not self.monitor_camera.enable_detect: self.toggle_detect()
         # 全屏
         self.master.attributes("-fullscreen", True)
+        self.master.attributes("-topmost", True)
         self.mode = Mode.ScreenSaver.name
         self.frame.pack_forget()
 
@@ -211,6 +213,7 @@ class LockScreen:
 #         if self.mode = Mode.ScreenSaver.name:
         # 退出屏保
         self.master.attributes("-fullscreen", False)
+        self.master.attributes("-topmost", False)
         self.mode = None
         self.frame.pack(fill=tk.BOTH, expand=True)
         self.monitor_label.destroy()
