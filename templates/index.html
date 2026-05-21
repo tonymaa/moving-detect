@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>移动监控</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; }
+.header { background: #16213e; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #0f3460; }
+.header h1 { font-size: 20px; font-weight: 600; }
+.status-badge { padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: 500; }
+.status-on { background: #00c853; color: #000; }
+.status-off { background: #ff5252; color: #fff; }
+
+.container { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; max-width: 1400px; margin: 0 auto; }
+@media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
+
+.card { background: #16213e; border-radius: 12px; padding: 16px; border: 1px solid #0f3460; }
+.card-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #53a8b6; }
+
+/* Live stream */
+.stream-wrap { position: relative; width: 100%; background: #000; border-radius: 8px; overflow: hidden; }
+.stream-wrap img { width: 100%; height: auto; display: block; }
+
+/* Controls */
+.controls { display: flex; flex-direction: column; gap: 10px; }
+.btn { padding: 10px 16px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: opacity .15s; }
+.btn:hover { opacity: 0.85; }
+.btn-primary { background: #0f3460; color: #fff; }
+.btn-success { background: #00c853; color: #000; }
+.btn-danger { background: #ff5252; color: #fff; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+select { padding: 8px 12px; border-radius: 8px; border: 1px solid #0f3460; background: #1a1a2e; color: #eee; font-size: 14px; }
+
+/* Notifications */
+.notif-list { max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.notif-item { padding: 10px 12px; background: #1a1a2e; border-radius: 8px; border-left: 3px solid #ff5252; font-size: 13px; }
+.notif-item .time { color: #888; font-size: 12px; }
+.notif-item .msg { margin-top: 4px; }
+
+/* Video list */
+.video-list { max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.video-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #1a1a2e; border-radius: 8px; cursor: pointer; transition: background .15s; }
+.video-item:hover { background: #0f3460; }
+.video-item .name { font-size: 13px; }
+.video-item .meta { font-size: 12px; color: #888; }
+.video-player { width: 100%; border-radius: 8px; margin-top: 10px; background: #000; }
+
+.empty-msg { text-align: center; color: #555; padding: 30px; font-size: 14px; }
+
+/* Full-width cards */
+.full-width { grid-column: 1 / -1; }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>移动监控</h1>
+    <span id="statusBadge" class="status-badge status-off">检测关闭</span>
+</div>
+
+<div class="container">
+    <!-- Live Stream -->
+    <div class="card">
+        <div class="card-title">实时画面</div>
+        <div class="stream-wrap">
+            <img id="liveStream" src="/api/stream" alt="live">
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="card">
+        <div class="card-title">控制面板</div>
+        <div class="controls">
+            <div>
+                <label style="font-size:13px;color:#888;margin-bottom:4px;display:block;">摄像头选择</label>
+                <select id="cameraSelect" style="width:100%;">
+                    <option value="0">Camera 0</option>
+                </select>
+            </div>
+            <button id="toggleBtn" class="btn btn-primary" onclick="toggleDetect()">开启检测</button>
+            <div style="font-size:13px;color:#888;margin-top:4px;">
+                当前状态：<span id="detectStatus">未知</span>
+            </div>
+        </div>
+
+        <!-- Video Player -->
+        <div style="margin-top:16px;">
+            <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+                视频播放
+                <span id="playingName" style="font-size:12px;color:#888;"></span>
+            </div>
+            <img id="videoPlayer" class="video-player" style="display:none;width:100%;border-radius:8px;background:#000;" alt="video">
+        </div>
+    </div>
+
+    <!-- Notifications -->
+    <div class="card">
+        <div class="card-title">检测通知 <span id="notifCount" style="font-size:12px;color:#888;"></span></div>
+        <div id="notifList" class="notif-list">
+            <div class="empty-msg">等待检测事件...</div>
+        </div>
+    </div>
+
+    <!-- Video History -->
+    <div class="card">
+        <div class="card-title">历史视频</div>
+        <div id="videoList" class="video-list">
+            <div class="empty-msg">加载中...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+const statusBadge = document.getElementById('statusBadge');
+const toggleBtn = document.getElementById('toggleBtn');
+const detectStatus = document.getElementById('detectStatus');
+const notifList = document.getElementById('notifList');
+const notifCount = document.getElementById('notifCount');
+const videoList = document.getElementById('videoList');
+const videoPlayer = document.getElementById('videoPlayer');
+const playingName = document.getElementById('playingName');
+const cameraSelect = document.getElementById('cameraSelect');
+
+let detecting = false;
+let notifications = [];
+
+// Load initial status
+fetch('/api/status').then(r => r.json()).then(d => {
+    detecting = d.detecting;
+    updateUI();
+});
+
+// Load cameras
+fetch('/api/cameras').then(r => r.json()).then(cameras => {
+    cameraSelect.innerHTML = '';
+    cameras.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.index;
+        opt.textContent = c.name;
+        cameraSelect.appendChild(opt);
+    });
+    fetch('/api/status').then(r => r.json()).then(d => {
+        if (d.camera_index !== undefined) cameraSelect.value = d.camera_index;
+    });
+});
+
+// Load videos
+function loadVideos() {
+    fetch('/api/videos').then(r => r.json()).then(files => {
+        if (!files.length) {
+            videoList.innerHTML = '<div class="empty-msg">暂无录制视频</div>';
+            return;
+        }
+        videoList.innerHTML = '';
+        files.forEach(f => {
+            const item = document.createElement('div');
+            item.className = 'video-item';
+            item.innerHTML = `<div><div class="name">${f.display}</div></div><div class="meta">${f.size_mb} MB</div>`;
+            item.onclick = () => playVideo(f.filename, f.display);
+            videoList.appendChild(item);
+        });
+    });
+}
+loadVideos();
+setInterval(loadVideos, 30000);
+
+function playVideo(filename, display) {
+    videoPlayer.src = '/api/play/' + filename;
+    videoPlayer.style.display = 'block';
+    playingName.textContent = display;
+}
+
+function updateUI() {
+    statusBadge.textContent = detecting ? '检测中' : '检测关闭';
+    statusBadge.className = 'status-badge ' + (detecting ? 'status-on' : 'status-off');
+    toggleBtn.textContent = detecting ? '关闭检测' : '开启检测';
+    toggleBtn.className = 'btn ' + (detecting ? 'btn-danger' : 'btn-success');
+    detectStatus.textContent = detecting ? '运行中' : '已停止';
+}
+
+function toggleDetect() {
+    fetch('/api/toggle_detect', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => { detecting = d.detecting; updateUI(); });
+}
+
+// SSE notifications
+const evtSource = new EventSource('/api/notifications');
+evtSource.onmessage = function(e) {
+    const data = JSON.parse(e.data);
+    notifications.unshift(data);
+    if (notifications.length > 100) notifications.pop();
+    renderNotifications();
+    loadVideos();
+};
+
+function renderNotifications() {
+    notifCount.textContent = `(${notifications.length})`;
+    if (!notifications.length) {
+        notifList.innerHTML = '<div class="empty-msg">等待检测事件...</div>';
+        return;
+    }
+    notifList.innerHTML = '';
+    notifications.forEach(n => {
+        const item = document.createElement('div');
+        item.className = 'notif-item';
+        item.innerHTML = `<div class="time">${n.time}</div><div class="msg">检测到移动，变化率 ${n.change}%</div>`;
+        notifList.appendChild(item);
+    });
+}
+</script>
+</body>
+</html>

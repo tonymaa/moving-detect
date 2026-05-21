@@ -34,17 +34,28 @@ def save_camera_index(index: int) -> None:
     save_config(config)
 
 
+_cached_cameras = None
+
+
 def list_cameras(max_test: int = 5) -> list[dict]:
-    """Enumerate available cameras by trying to open each index."""
+    """Enumerate available cameras. Result is cached after first call."""
+    global _cached_cameras
+    if _cached_cameras is not None:
+        return _cached_cameras
     cameras = []
     for i in range(max_test):
-        cap = cv2.VideoCapture(i)
+        cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
         if cap.isOpened():
             ret, _ = cap.read()
             if ret:
                 cameras.append({'index': i, 'name': f'Camera {i}'})
             cap.release()
+    _cached_cameras = cameras
     return cameras
+
+
+def get_cached_cameras() -> list[dict]:
+    return list_cameras()
 
 # 设置日志记录
 log_dir = './logs'
@@ -83,103 +94,124 @@ class App:
         self.enable_detect = enable_detect
         self._stop_event = threading.Event()
         self._stopped = False
+        self.latest_frame = None
+        self._latest_jpeg = None
+        self._frame_lock = threading.Lock()
+        self._notification_callbacks = []
 
     def stop(self):
         self._stop_event.set()
+
+    def on_notification(self, callback):
+        self._notification_callbacks.append(callback)
+
+    def get_frame_jpeg(self):
+        with self._frame_lock:
+            return self._latest_jpeg
 
     def start_detect(self, onGetFrame, onDetected, camera_idx=None):
         self._stop_event.clear()
         self._stopped = False
         if camera_idx is None:
             camera_idx = get_camera_index()
+        self._camera_idx = camera_idx
         # 初始化摄像头
-        cap = cv2.VideoCapture(camera_idx)
+        cap = cv2.VideoCapture(camera_idx, cv2.CAP_DSHOW)
         if not cap.isOpened():
             logger.error(f"无法打开摄像头 {camera_idx}")
             self._stopped = True
             return
 
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
         # 读取第一帧
-        ret, frame1 = cap.read()
+        while not self._stop_event.is_set():
+            ret, frame1 = cap.read()
+            if ret:
+                break
+            logger.warning("等待摄像头就绪...")
+            time.sleep(0.5)
+        else:
+            cap.release()
+            self._stopped = True
+            return
+
         gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
         gray1 = cv2.GaussianBlur(gray1, (21, 21), 0)
 
-        # 设置去抖动时间（秒）
-        debounce_time = 2  # 例如2秒
-        last_alert_time = 0  # 上次打印时间
-        recording = False  # 录制状态
+        debounce_time = 2
+        last_alert_time = 0
+        recording = False
 
         if self.enable_detect: logger.info("开始检测...")
-        
+
         while not self._stop_event.is_set():
-            # 读取下一帧
-            ret, frame2 = cap.read()
-            gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
-            gray2 = cv2.GaussianBlur(gray2, (21, 21), 0)
+            try:
+                ret, frame2 = cap.read()
+                if not ret:
+                    logger.warning("摄像头读取失败，重试中...")
+                    time.sleep(0.1)
+                    continue
 
-            # 如果正在录制，则跳过变化检测
-            if self.enable_detect and not recording:
-                # 计算帧之间的差异
-                delta = cv2.absdiff(gray1, gray2)
-                thresh = cv2.threshold(delta, 25, 255, cv2.THRESH_BINARY)[1]
+                gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+                gray2 = cv2.GaussianBlur(gray2, (21, 21), 0)
 
-                # 计算变化的像素数量
-                change_pixels = np.sum(thresh) / 255  # 计算白色像素的数量
-                total_pixels = thresh.size  # 总像素数
+                if self.enable_detect and not recording:
+                    delta = cv2.absdiff(gray1, gray2)
+                    thresh = cv2.threshold(delta, 25, 255, cv2.THRESH_BINARY)[1]
+                    change_pixels = np.sum(thresh) / 255
+                    total_pixels = thresh.size
+                    change_percentage = (change_pixels / total_pixels) * 100
 
-                # 计算变化比例
-                change_percentage = (change_pixels / total_pixels) * 100
+                    if change_percentage > 10:
+                        current_time = time.time()
+                        if current_time - last_alert_time > debounce_time:
+                            last_alert_time = current_time
 
-                # 如果变化超过10%
-                if change_percentage > 10:
-                    current_time = time.time()  # 获取当前时间
-                    # 检查是否超过去抖动时间
-                    if current_time - last_alert_time > debounce_time:
-                        last_alert_time = current_time  # 更新上次打印时间
-                        
-                        # 创建通知任务
+                            if onDetected is not None:
+                                onDetectedTask = threading.Thread(target=lambda: onDetected(frame2))
+                                onDetectedTask.start()
 
+                            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            for cb in self._notification_callbacks:
+                                try:
+                                    cb(ts, change_percentage)
+                                except Exception:
+                                    pass
 
-                        if onDetected is not None:
-                            onDetectedTask = threading.Thread(target=lambda: onDetected(frame2))
-                            onDetectedTask.start()
+                            logger.info(f"录制视频: 变化超过10%: {change_percentage:.2f}%")
+                            recording = True
+                            video_filename = os.path.join(self.video_dir, datetime.now().strftime("%Y%m%d_%H%M%S") + ".avi")
+                            fourcc = cv2.VideoWriter_fourcc(*'XVID')
+                            out = cv2.VideoWriter(video_filename, fourcc, 20.0, (frame2.shape[1], frame2.shape[0]))
+                            start_time = time.time()
 
+                if recording:
+                    out.write(frame2)
+                    if time.time() - start_time >= 15 or not self.enable_detect:
+                        recording = False
+                        out.release()
+                        logger.info(f"视频录制完成: {video_filename}")
 
-                        logger.info(f"录制视频: 变化超过10%: {change_percentage:.2f}%")
-                        # 开始录制视频
-                        recording = True
-                        video_filename = os.path.join(self.video_dir, datetime.now().strftime("%Y%m%d_%H%M%S") + ".avi")
-                        fourcc = cv2.VideoWriter_fourcc(*'XVID')
-                        out = cv2.VideoWriter(video_filename, fourcc, 20.0, (frame2.shape[1], frame2.shape[0]))
-                        
-                        # 录制30秒
-                        start_time = time.time()
+                gray1 = gray2
 
-            # 如果正在录制
-            if recording:
-                out.write(frame2)  # 写入当前帧
-                if time.time() - start_time >= 15 or not self.enable_detect:  # 录制30秒
-                    recording = False
-                    out.release()  # 释放视频写入对象
-                    logger.info(f"视频录制完成: {video_filename}")
+                with self._frame_lock:
+                    self.latest_frame = frame2.copy()
+                    _, buf = cv2.imencode('.jpg', frame2, [cv2.IMWRITE_JPEG_QUALITY, 70])
+                    self._latest_jpeg = buf.tobytes()
 
-            # 更新上一帧
-            gray1 = gray2
+                if onGetFrame is not None:
+                    onGetFrame(frame2)
 
-            # 显示当前帧
-            if onGetFrame is not None:
-                onGetFrame(frame2)
-            else: cv2.imshow("Frame", frame2)
+            except Exception as e:
+                logger.error(f"检测循环异常: {e}")
+                time.sleep(0.1)
 
-            # 按 'q' 键退出
-            if cv2.waitKey(33) & 0xFF == ord('q'):
-                break
+            time.sleep(0.03)
 
-        # 释放摄像头和关闭所有窗口
         cap.release()
         if recording:
-            out.release()  # 确保在退出时释放视频写入对象
-        cv2.destroyAllWindows()
+            out.release()
         logger.info("检测结束.")
 
 if __name__ == "__main__":

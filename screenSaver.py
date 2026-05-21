@@ -1,12 +1,12 @@
 from time import sleep
-import cv2
 import threading
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk, ImageEnhance
 import pystray
-from movingDetect import App, list_cameras, get_camera_index, save_camera_index
-import numpy as np
+from movingDetect import App, list_cameras, get_camera_index, save_camera_index, load_config
+import webbrowser
+import web_server
 from enum import Enum
 
 class Mode(Enum):
@@ -20,11 +20,12 @@ class LockScreen:
         self.master.title("Lock Screen")
         self.mode = None
         self.video_stream = None
+        self.web_running = False
 
         self.master.bind("<Escape>", self.exit_fullscreen)  # 按 Esc 键退出全屏
 
         window_width = 200
-        window_height = 330
+        window_height = 360
 
         # 获取屏幕的宽度和高度
         screen_width = root.winfo_screenwidth()
@@ -104,6 +105,9 @@ class LockScreen:
         self.dark_mode_btn = tk.Button(bottom_frame, text="开启暗屏并检测", command=self.dark_mode)
         self.dark_mode_btn.pack()
 
+        self.web_btn = tk.Button(bottom_frame, text="启动Web服务", command=self.toggle_web)
+        self.web_btn.pack()
+
         self.monitor_label = tk.Label(self.master, width=120, height=120)
 
 #         self.menu = pystray.Menu(
@@ -135,10 +139,26 @@ class LockScreen:
     def _start_video_stream(self):
         cam_idx = self._get_selected_camera_index()
         self.video_stream = threading.Thread(
-            target=lambda: self.monitor_camera.start_detect(self.loadFrameToUI, self.onDetect, cam_idx)
+            target=lambda: self.monitor_camera.start_detect(None, self.onDetect, cam_idx)
         )
         self.video_stream.setDaemon(True)
         self.video_stream.start()
+        self._poll_frame()
+
+    def _poll_frame(self):
+        if self.mode is not None:
+            self.master.after(50, self._poll_frame)
+            return
+        try:
+            frame = None
+            with self.monitor_camera._frame_lock:
+                if self.monitor_camera.latest_frame is not None:
+                    frame = self.monitor_camera.latest_frame.copy()
+            if frame is not None:
+                self._update_video_label(frame)
+        except Exception:
+            pass
+        self.master.after(33, self._poll_frame)
 
     def on_camera_changed(self, event=None):
         cam_idx = self._get_selected_camera_index()
@@ -148,6 +168,17 @@ class LockScreen:
         if self.video_stream and self.video_stream.is_alive():
             self.video_stream.join(timeout=3)
         self._start_video_stream()
+
+    def toggle_web(self):
+        if self.web_running:
+            self.web_btn.configure(text="启动Web服务")
+            self.web_running = False
+        else:
+            port = load_config().get('web_port', 9999)
+            web_server.start_server_thread(self.monitor_camera, port)
+            self.web_running = True
+            self.web_btn.configure(text=f"Web:{port}")
+            webbrowser.open(f'http://localhost:{port}')
 
 
     def onDetect(self, frame):
@@ -188,41 +219,25 @@ class LockScreen:
 
 
 
-    def loadFrameToUI(self, frame):
-        if self.mode is not None: return
-        # 获取 Label 的当前大小
+    def _update_video_label(self, frame):
         label_width = self.video_label.winfo_width()
         label_height = self.video_label.winfo_height()
-        # 获取原始帧的大小
+        if label_width < 2 or label_height < 2:
+            return
         frame_height, frame_width, _ = frame.shape
-        # 计算缩放因子
         scale = min(label_width / frame_width, label_height / frame_height)
-
-        # 计算缩放后的新尺寸
         new_width = int(frame_width * scale)
         new_height = int(frame_height * scale)
 
-        # 转换为 RGB
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        rgb = frame[:, :, ::-1]  # BGR -> RGB via numpy slice, no OpenCV
+        img = Image.fromarray(rgb).resize((new_width, new_height), Image.LANCZOS)
 
-        # 调整帧的大小
-        frame = cv2.resize(frame, (new_width, new_height))
-
-        # 创建一个新的空白图像，并填充为白色（或其他背景色）
-        new_frame = 0 * np.ones(shape=[label_height, label_width, 3], dtype=np.uint8)
-
-        # 计算放置图像的位置，以便居中
+        canvas = Image.new('RGB', (label_width, label_height), (0, 0, 0))
         x_offset = (label_width - new_width) // 2
         y_offset = (label_height - new_height) // 2
+        canvas.paste(img, (x_offset, y_offset))
 
-        # 将调整大小后的帧放入新图像中
-        new_frame[y_offset:y_offset + new_height, x_offset:x_offset + new_width] = frame
-
-        # 将帧转换为 Image
-        img = Image.fromarray(new_frame)
-        img_tk = ImageTk.PhotoImage(image=img)
-
-        # 更新标签以显示新帧
+        img_tk = ImageTk.PhotoImage(image=canvas)
         self.video_label.imgtk = img_tk
         self.video_label.configure(image=img_tk)
 
