@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk, ImageEnhance
 import pystray
-from movingDetect import App, list_cameras, get_camera_index, save_camera_index, load_config
+from movingDetect import App, list_cameras, get_camera_index, save_camera_index, load_config, get_recording_duration, save_recording_duration
 import webbrowser
 import web_server
 from enum import Enum
@@ -25,7 +25,7 @@ class LockScreen:
         self.master.bind("<Escape>", self.exit_fullscreen)  # 按 Esc 键退出全屏
 
         window_width = 200
-        window_height = 360
+        window_height = 420
 
         # 获取屏幕的宽度和高度
         screen_width = root.winfo_screenwidth()
@@ -95,6 +95,15 @@ class LockScreen:
         self.cam_combo.pack(side=tk.LEFT, padx=5)
         self.cam_combo.bind("<<ComboboxSelected>>", self.on_camera_changed)
 
+        # 录制时长配置
+        dur_frame = tk.Frame(bottom_frame)
+        dur_frame.pack(fill=tk.X, padx=5, pady=2)
+        tk.Label(dur_frame, text="录制时长(秒):").pack(side=tk.LEFT)
+        self.duration_var = tk.StringVar(value=str(get_recording_duration()))
+        self.duration_entry = tk.Entry(dur_frame, textvariable=self.duration_var, width=5)
+        self.duration_entry.pack(side=tk.LEFT, padx=5)
+        tk.Button(dur_frame, text="保存", command=self.save_duration).pack(side=tk.LEFT)
+
         self.monitor_camera.enable_detect = False
         self.toggle_video_btn = tk.Button(bottom_frame, text="隐藏画面", command=self.toggle_video)
         self.toggle_video_btn.pack()
@@ -125,6 +134,9 @@ class LockScreen:
 
         self.monitor_camera._lock_screen = self
 
+        # 默认启动Web服务
+        self.toggle_web()
+
     def toggle_detect(self):
         if self.monitor_camera.enable_detect:
             self.monitor_camera.enable_detect = False
@@ -132,6 +144,14 @@ class LockScreen:
         else:
             self.monitor_camera.enable_detect = True
             self.toggle_detect_btn.configure(text="关闭检测")
+
+    def save_duration(self):
+        try:
+            val = max(5, min(300, int(self.duration_var.get())))
+        except ValueError:
+            val = 15
+        self.duration_var.set(str(val))
+        save_recording_duration(val)
 
     def toggle_video(self):
         if self.video_label.winfo_ismapped():

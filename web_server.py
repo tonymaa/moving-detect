@@ -40,11 +40,21 @@ def create_web_app(detect_app):
     def status():
         ls = getattr(_web_app.detect_app, '_lock_screen', None)
         mode = ls.mode if ls else None
+        from movingDetect import get_recording_duration
         return jsonify({
             'detecting': _web_app.detect_app.enable_detect,
             'camera_index': _web_app.detect_app._camera_idx if hasattr(_web_app.detect_app, '_camera_idx') else 0,
-            'mode': mode
+            'mode': mode,
+            'recording_duration': get_recording_duration()
         })
+
+    @_web_app.route('/api/set_recording_duration', methods=['POST'])
+    def set_recording_duration():
+        from movingDetect import save_recording_duration
+        data = request.get_json(force=True)
+        duration = int(data.get('duration', 15))
+        save_recording_duration(duration)
+        return jsonify({'recording_duration': duration})
 
     @_web_app.route('/api/toggle_detect', methods=['POST'])
     def toggle_detect():
@@ -95,15 +105,19 @@ def create_web_app(detect_app):
                 if f.endswith('.avi') or f.endswith('.mp4'):
                     path = os.path.join(video_dir, f)
                     size_mb = os.path.getsize(path) / (1024 * 1024)
-                    # parse datetime from filename: YYYYMMDD_HHMMSS.avi
                     name = os.path.splitext(f)[0]
+                    has_thumb = os.path.exists(os.path.join(video_dir, name + '.jpg'))
                     try:
                         dt = datetime.strptime(name, "%Y%m%d_%H%M%S")
                         display = dt.strftime("%Y-%m-%d %H:%M:%S")
                     except ValueError:
                         display = name
-                    files.append({'filename': f, 'display': display, 'size_mb': round(size_mb, 2)})
+                    files.append({'filename': f, 'display': display, 'size_mb': round(size_mb, 2), 'thumb': has_thumb})
         return jsonify(files)
+
+    @_web_app.route('/api/thumb/<filename>')
+    def thumb_file(filename):
+        return send_from_directory(_web_app.detect_app.video_dir, filename)
 
     @_web_app.route('/api/video/<filename>')
     def video_file(filename):

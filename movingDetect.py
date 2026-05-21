@@ -34,6 +34,14 @@ def save_camera_index(index: int) -> None:
     save_config(config)
 
 
+def get_recording_duration() -> int:
+    return load_config().get('recording_duration', 15)
+
+
+def save_recording_duration(duration: int) -> None:
+    config = load_config()
+    config['recording_duration'] = max(5, min(300, duration))
+    save_config(config)
 _cached_cameras = None
 
 
@@ -181,14 +189,17 @@ class App:
 
                             logger.info(f"录制视频: 变化超过10%: {change_percentage:.2f}%")
                             recording = True
-                            video_filename = os.path.join(self.video_dir, datetime.now().strftime("%Y%m%d_%H%M%S") + ".avi")
+                            base_name = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            video_filename = os.path.join(self.video_dir, base_name + ".avi")
                             fourcc = cv2.VideoWriter_fourcc(*'XVID')
                             out = cv2.VideoWriter(video_filename, fourcc, 20.0, (frame2.shape[1], frame2.shape[0]))
+                            thumb_path = os.path.join(self.video_dir, base_name + ".jpg")
+                            cv2.imwrite(thumb_path, frame2)
                             start_time = time.time()
 
                 if recording:
                     out.write(frame2)
-                    if time.time() - start_time >= 15 or not self.enable_detect:
+                    if time.time() - start_time >= get_recording_duration() or not self.enable_detect:
                         recording = False
                         out.release()
                         logger.info(f"视频录制完成: {video_filename}")
