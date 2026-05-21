@@ -123,6 +123,8 @@ class LockScreen:
 
         self._start_video_stream()
 
+        self.monitor_camera._lock_screen = self
+
     def toggle_detect(self):
         if self.monitor_camera.enable_detect:
             self.monitor_camera.enable_detect = False
@@ -262,6 +264,7 @@ class LockScreen:
         self.enhancer_bg_img= ImageTk.PhotoImage(enhancer.enhance(0))
         self.label.configure(image=self.enhancer_bg_img)
         self.frame.pack_forget()
+        web_server.notify_mode_change(self.mode)
 
     def lock(self):
         if not self.monitor_camera.enable_detect: self.toggle_detect()
@@ -270,6 +273,7 @@ class LockScreen:
         self.master.attributes("-topmost", True)
         self.mode = Mode.ScreenSaver.name
         self.frame.pack_forget()
+        web_server.notify_mode_change(self.mode)
 
 
     def start_tary(self):
@@ -287,6 +291,7 @@ class LockScreen:
         self.frame.pack(fill=tk.BOTH, expand=True)
         self.monitor_label.destroy()
         self.label.configure(image=self.background_photo)
+        web_server.notify_mode_change(None)
 #         elif self.mode = Mode.DarkScreen.name:
         # 退出暗屏
 #         self.master.quit()

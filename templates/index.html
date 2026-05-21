@@ -80,8 +80,14 @@ select { padding: 8px 12px; border-radius: 8px; border: 1px solid #0f3460; backg
                 </select>
             </div>
             <button id="toggleBtn" class="btn btn-primary" onclick="toggleDetect()">开启检测</button>
+            <div id="lockButtons">
+                <button class="btn btn-primary" onclick="triggerLock()">开启屏保并检测</button>
+                <button class="btn btn-primary" onclick="triggerDarkMode()">开启暗屏并检测</button>
+            </div>
+            <button id="exitLockBtn" class="btn btn-danger" style="display:none;" onclick="triggerExitLock()">退出屏保</button>
             <div style="font-size:13px;color:#888;margin-top:4px;">
                 当前状态：<span id="detectStatus">未知</span>
+                <span id="modeStatus" style="margin-left:8px;"></span>
             </div>
         </div>
 
@@ -124,12 +130,39 @@ const playingName = document.getElementById('playingName');
 const cameraSelect = document.getElementById('cameraSelect');
 
 let detecting = false;
+let currentMode = null;
 let notifications = [];
+
+const lockButtons = document.getElementById('lockButtons');
+const exitLockBtn = document.getElementById('exitLockBtn');
+const modeStatus = document.getElementById('modeStatus');
+
+function updateModeUI() {
+    if (currentMode === 'ScreenSaver') {
+        lockButtons.style.display = 'none';
+        exitLockBtn.style.display = 'block';
+        exitLockBtn.textContent = '退出屏保';
+        modeStatus.textContent = '| 屏保模式';
+        modeStatus.style.color = '#ff5252';
+    } else if (currentMode === 'DarkScreen') {
+        lockButtons.style.display = 'none';
+        exitLockBtn.style.display = 'block';
+        exitLockBtn.textContent = '退出暗屏';
+        modeStatus.textContent = '| 暗屏模式';
+        modeStatus.style.color = '#ff5252';
+    } else {
+        lockButtons.style.display = 'block';
+        exitLockBtn.style.display = 'none';
+        modeStatus.textContent = '';
+    }
+}
 
 // Load initial status
 fetch('/api/status').then(r => r.json()).then(d => {
     detecting = d.detecting;
+    currentMode = d.mode || null;
     updateUI();
+    updateModeUI();
 });
 
 // Load cameras
@@ -186,10 +219,33 @@ function toggleDetect() {
         .then(d => { detecting = d.detecting; updateUI(); });
 }
 
+function triggerLock() {
+    fetch('/api/lock', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => { if (d.status !== 'ok') alert(d.message || '操作失败'); });
+}
+
+function triggerDarkMode() {
+    fetch('/api/dark_mode', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => { if (d.status !== 'ok') alert(d.message || '操作失败'); });
+}
+
+function triggerExitLock() {
+    fetch('/api/exit_lock', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => { if (d.status !== 'ok') alert(d.message || '操作失败'); });
+}
+
 // SSE notifications
 const evtSource = new EventSource('/api/notifications');
 evtSource.onmessage = function(e) {
     const data = JSON.parse(e.data);
+    if (data.type === 'mode') {
+        currentMode = data.mode;
+        updateModeUI();
+        return;
+    }
     notifications.unshift(data);
     if (notifications.length > 100) notifications.pop();
     renderNotifications();

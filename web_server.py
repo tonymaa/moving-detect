@@ -38,9 +38,12 @@ def create_web_app(detect_app):
 
     @_web_app.route('/api/status')
     def status():
+        ls = getattr(_web_app.detect_app, '_lock_screen', None)
+        mode = ls.mode if ls else None
         return jsonify({
             'detecting': _web_app.detect_app.enable_detect,
-            'camera_index': _web_app.detect_app._camera_idx if hasattr(_web_app.detect_app, '_camera_idx') else 0
+            'camera_index': _web_app.detect_app._camera_idx if hasattr(_web_app.detect_app, '_camera_idx') else 0,
+            'mode': mode
         })
 
     @_web_app.route('/api/toggle_detect', methods=['POST'])
@@ -53,6 +56,30 @@ def create_web_app(detect_app):
         data = request.get_json(force=True)
         _web_app.detect_app.enable_detect = bool(data.get('enabled', True))
         return jsonify({'detecting': _web_app.detect_app.enable_detect})
+
+    @_web_app.route('/api/lock', methods=['POST'])
+    def lock():
+        ls = getattr(_web_app.detect_app, '_lock_screen', None)
+        if ls:
+            ls.master.after(0, ls.lock)
+            return jsonify({'status': 'ok'})
+        return jsonify({'status': 'error', 'message': '桌面端未运行'}), 400
+
+    @_web_app.route('/api/dark_mode', methods=['POST'])
+    def dark_mode():
+        ls = getattr(_web_app.detect_app, '_lock_screen', None)
+        if ls:
+            ls.master.after(0, ls.dark_mode)
+            return jsonify({'status': 'ok'})
+        return jsonify({'status': 'error', 'message': '桌面端未运行'}), 400
+
+    @_web_app.route('/api/exit_lock', methods=['POST'])
+    def exit_lock():
+        ls = getattr(_web_app.detect_app, '_lock_screen', None)
+        if ls:
+            ls.master.after(0, ls.exit_fullscreen)
+            return jsonify({'status': 'ok'})
+        return jsonify({'status': 'error', 'message': '桌面端未运行'}), 400
 
     @_web_app.route('/api/cameras')
     def cameras():
@@ -131,7 +158,21 @@ def create_web_app(detect_app):
 def notify_web(timestamp, change_pct):
     if _web_app is None:
         return
-    data = {'time': timestamp, 'change': round(change_pct, 2)}
+    data = {'type': 'detect', 'time': timestamp, 'change': round(change_pct, 2)}
+    dead = []
+    for q in _web_app.notification_queues:
+        try:
+            q.put_nowait(data)
+        except queue.Full:
+            dead.append(q)
+    for q in dead:
+        _web_app.notification_queues.remove(q)
+
+
+def notify_mode_change(mode):
+    if _web_app is None:
+        return
+    data = {'type': 'mode', 'mode': mode}
     dead = []
     for q in _web_app.notification_queues:
         try:
