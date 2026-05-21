@@ -2,9 +2,10 @@ from time import sleep
 import cv2
 import threading
 import tkinter as tk
+from tkinter import ttk
 from PIL import Image, ImageTk, ImageEnhance
 import pystray
-from movingDetect import App
+from movingDetect import App, list_cameras, get_camera_index, save_camera_index
 import numpy as np
 from enum import Enum
 
@@ -18,11 +19,12 @@ class LockScreen:
         self.master = master
         self.master.title("Lock Screen")
         self.mode = None
+        self.video_stream = None
 
         self.master.bind("<Escape>", self.exit_fullscreen)  # 按 Esc 键退出全屏
 
         window_width = 200
-        window_height = 300
+        window_height = 330
 
         # 获取屏幕的宽度和高度
         screen_width = root.winfo_screenwidth()
@@ -72,6 +74,26 @@ class LockScreen:
         # 创建一个固定高度的底部框架
         bottom_frame = tk.Frame(self.frame, height=window_height - 200)
         bottom_frame.pack(fill=tk.X)  # 填满 X 轴
+
+        # 摄像头选择器
+        cam_frame = tk.Frame(bottom_frame)
+        cam_frame.pack(fill=tk.X, padx=5, pady=2)
+        tk.Label(cam_frame, text="摄像头:").pack(side=tk.LEFT)
+        self.cameras = list_cameras()
+        cam_names = [c['name'] for c in self.cameras]
+        saved_idx = get_camera_index()
+        self.selected_camera = tk.StringVar()
+        # 默认选中已保存的摄像头
+        default_name = f'Camera {saved_idx}'
+        if default_name in cam_names:
+            self.selected_camera.set(default_name)
+        elif cam_names:
+            self.selected_camera.set(cam_names[0])
+        self.cam_combo = ttk.Combobox(cam_frame, textvariable=self.selected_camera,
+                                       values=cam_names, state='readonly', width=12)
+        self.cam_combo.pack(side=tk.LEFT, padx=5)
+        self.cam_combo.bind("<<ComboboxSelected>>", self.on_camera_changed)
+
         self.monitor_camera.enable_detect = False
         self.toggle_detect_btn = tk.Button(bottom_frame, text= "关闭检测" if self.monitor_camera.enable_detect else "开启检测", command=self.toggle_detect)
         self.toggle_detect_btn.pack()
@@ -93,9 +115,7 @@ class LockScreen:
 #         self.start_tary()
 
 
-        video_stream = threading.Thread(target=lambda: self.monitor_camera.start_detect(self.loadFrameToUI, self.onDetect))
-        video_stream.setDaemon(True)
-        video_stream.start()
+        self._start_video_stream()
 
     def toggle_detect(self):
         if self.monitor_camera.enable_detect:
@@ -104,6 +124,30 @@ class LockScreen:
         else:
             self.monitor_camera.enable_detect = True
             self.toggle_detect_btn.configure(text="关闭检测")
+
+    def _get_selected_camera_index(self) -> int:
+        name = self.selected_camera.get()
+        for c in self.cameras:
+            if c['name'] == name:
+                return c['index']
+        return 0
+
+    def _start_video_stream(self):
+        cam_idx = self._get_selected_camera_index()
+        self.video_stream = threading.Thread(
+            target=lambda: self.monitor_camera.start_detect(self.loadFrameToUI, self.onDetect, cam_idx)
+        )
+        self.video_stream.setDaemon(True)
+        self.video_stream.start()
+
+    def on_camera_changed(self, event=None):
+        cam_idx = self._get_selected_camera_index()
+        save_camera_index(cam_idx)
+        # 停止当前检测循环，然后重启
+        self.monitor_camera.stop()
+        if self.video_stream and self.video_stream.is_alive():
+            self.video_stream.join(timeout=3)
+        self._start_video_stream()
 
 
     def onDetect(self, frame):

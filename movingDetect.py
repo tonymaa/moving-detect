@@ -6,9 +6,45 @@ import base64
 import threading
 import logging
 import requests
+import json
 from datetime import datetime
 
-camera_index = 0
+CONFIG_FILE = 'config.json'
+
+
+def load_config() -> dict:
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+
+def save_config(config: dict) -> None:
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(config, f, indent=2)
+
+
+def get_camera_index() -> int:
+    return load_config().get('camera_index', 0)
+
+
+def save_camera_index(index: int) -> None:
+    config = load_config()
+    config['camera_index'] = index
+    save_config(config)
+
+
+def list_cameras(max_test: int = 5) -> list[dict]:
+    """Enumerate available cameras by trying to open each index."""
+    cameras = []
+    for i in range(max_test):
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened():
+            ret, _ = cap.read()
+            if ret:
+                cameras.append({'index': i, 'name': f'Camera {i}'})
+            cap.release()
+    return cameras
 
 # 设置日志记录
 log_dir = './logs'
@@ -64,15 +100,28 @@ def notify_by_qq(frame):
     logger.info('Response: %s', response)
 
 class App:
-    def __init__(self, enable_detect = True):
+    def __init__(self, enable_detect=True):
         # 创建视频保存目录
         self.video_dir = './video'
         os.makedirs(self.video_dir, exist_ok=True)
         self.enable_detect = enable_detect
+        self._stop_event = threading.Event()
+        self._stopped = False
 
-    def start_detect(self, onGetFrame, onDetected):
+    def stop(self):
+        self._stop_event.set()
+
+    def start_detect(self, onGetFrame, onDetected, camera_idx=None):
+        self._stop_event.clear()
+        self._stopped = False
+        if camera_idx is None:
+            camera_idx = get_camera_index()
         # 初始化摄像头
-        cap = cv2.VideoCapture(camera_index)
+        cap = cv2.VideoCapture(camera_idx)
+        if not cap.isOpened():
+            logger.error(f"无法打开摄像头 {camera_idx}")
+            self._stopped = True
+            return
 
         # 读取第一帧
         ret, frame1 = cap.read()
@@ -86,7 +135,7 @@ class App:
 
         if self.enable_detect: logger.info("开始检测...")
         
-        while True:
+        while not self._stop_event.is_set():
             # 读取下一帧
             ret, frame2 = cap.read()
             gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
@@ -159,4 +208,4 @@ class App:
         logger.info("检测结束.")
 
 if __name__ == "__main__":
-    App().start_detect(None, None)
+    App().start_detect(None, None, get_camera_index())
