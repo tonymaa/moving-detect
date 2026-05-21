@@ -96,6 +96,8 @@ class LockScreen:
         self.cam_combo.bind("<<ComboboxSelected>>", self.on_camera_changed)
 
         self.monitor_camera.enable_detect = False
+        self.toggle_video_btn = tk.Button(bottom_frame, text="隐藏画面", command=self.toggle_video)
+        self.toggle_video_btn.pack()
         self.toggle_detect_btn = tk.Button(bottom_frame, text= "关闭检测" if self.monitor_camera.enable_detect else "开启检测", command=self.toggle_detect)
         self.toggle_detect_btn.pack()
 
@@ -128,6 +130,14 @@ class LockScreen:
         else:
             self.monitor_camera.enable_detect = True
             self.toggle_detect_btn.configure(text="关闭检测")
+
+    def toggle_video(self):
+        if self.video_label.winfo_ismapped():
+            self.video_label.pack_forget()
+            self.toggle_video_btn.configure(text="显示画面")
+        else:
+            self.video_label.pack(fill=tk.BOTH, expand=True)
+            self.toggle_video_btn.configure(text="隐藏画面")
 
     def _get_selected_camera_index(self) -> int:
         name = self.selected_camera.get()
