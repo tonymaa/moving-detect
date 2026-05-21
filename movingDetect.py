@@ -74,30 +74,6 @@ console_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 logger.addHandler(console_handler)
 
-def notify_by_qq(frame):
-    logger.info("notify_by_qq...")
-    # 将图像转换为 JPEG 格式
-    _, buffer = cv2.imencode('.jpg', frame)
-
-    # 将图像编码为 Base64
-    encoded_string = base64.b64encode(buffer).decode('utf-8')
-    # 构建请求体
-    data = {
-        "user_id": "1605337475",
-        "message": [
-            {
-                "type": "image",
-                "data": {
-                    "file": f"data:image/jpeg;base64,{encoded_string}"
-                }
-            }
-        ]
-    }
-    # 发送 POST 请求
-    url = 'http://192.168.1.100:2701/send_private_msg'
-    response = requests.post(url, json=data, headers={"Content-Type": "application/json"})
-    logger.info('Status Code: %s', response.status_code)
-    logger.info('Response: %s', response)
 
 class App:
     def __init__(self, enable_detect=True):
@@ -162,8 +138,7 @@ class App:
                         last_alert_time = current_time  # 更新上次打印时间
                         
                         # 创建通知任务
-                        notify_task = threading.Thread(target=lambda: notify_by_qq(frame2))
-                        notify_task.start()
+
 
                         if onDetected is not None:
                             onDetectedTask = threading.Thread(target=lambda: onDetected(frame2))
