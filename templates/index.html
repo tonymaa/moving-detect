@@ -127,16 +127,6 @@ select { padding: 8px 12px; border-radius: 8px; border: 1px solid #0f3460; backg
                 <span id="modeStatus" style="margin-left:8px;"></span>
             </div>
         </div>
-
-        <!-- Video Player -->
-        <div style="margin-top:16px;">
-            <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
-                视频播放
-                <span id="playingName" style="font-size:12px;color:#888;"></span>
-            </div>
-            <img id="videoPlayer" class="video-player" style="display:none;width:100%;border-radius:8px;background:#000;" alt="video">
-            <div id="playingFaces" class="video-faces" style="display:none;"></div>
-        </div>
     </div>
 
     <!-- Notifications -->
@@ -152,6 +142,14 @@ select { padding: 8px 12px; border-radius: 8px; border: 1px solid #0f3460; backg
         <div class="card-title">历史视频</div>
         <div id="videoList" class="video-list">
             <div class="empty-msg">加载中...</div>
+        </div>
+        <div id="videoPlayerSection" style="display:none;margin-top:12px;border-top:1px solid #0f3460;padding-top:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <span id="playingName" style="font-size:13px;color:#888;"></span>
+                <button class="btn btn-danger" style="padding:2px 10px;font-size:12px;" onclick="closePlayer()">关闭</button>
+            </div>
+            <img id="videoPlayer" class="video-player" style="width:100%;border-radius:8px;background:#000;" alt="video">
+            <div id="playingFaces" class="video-faces"></div>
         </div>
     </div>
 
@@ -304,8 +302,8 @@ setInterval(loadVideos, 30000);
 
 function playVideo(v) {
     videoPlayer.src = '/api/play/' + v.filename;
-    videoPlayer.style.display = 'block';
     playingName.textContent = v.display;
+    document.getElementById('videoPlayerSection').style.display = 'block';
     if (v.faces.length) {
         playingFaces.style.display = 'flex';
         playingFaces.innerHTML = v.faces.map(p =>
@@ -315,6 +313,11 @@ function playVideo(v) {
         playingFaces.style.display = 'none';
         playingFaces.innerHTML = '';
     }
+}
+
+function closePlayer() {
+    videoPlayer.src = '';
+    document.getElementById('videoPlayerSection').style.display = 'none';
 }
 
 function updateUI() {
