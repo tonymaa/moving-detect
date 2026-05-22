@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk, ImageEnhance
 import pystray
-from movingDetect import App, list_cameras, get_camera_index, save_camera_index, load_config, get_recording_duration, save_recording_duration, get_show_face_boxes, save_show_face_boxes, get_show_camera, save_show_camera
+from movingDetect import App, list_cameras, get_camera_index, save_camera_index, load_config, get_recording_duration, save_recording_duration, get_show_face_boxes, save_show_face_boxes, get_show_camera, save_show_camera, get_record_mode, save_record_mode
 import webbrowser
 import web_server
 from enum import Enum
@@ -111,6 +111,16 @@ class LockScreen:
         face_box_cb = tk.Checkbutton(bottom_frame, text="显示人脸框", variable=self.face_box_var, command=self.toggle_face_boxes)
         face_box_cb.pack()
 
+        # 录制触发模式
+        mode_frame = tk.Frame(bottom_frame)
+        mode_frame.pack(fill=tk.X, padx=5, pady=2)
+        tk.Label(mode_frame, text="录制触发:").pack(side=tk.LEFT)
+        self.record_mode_var = tk.StringVar(value=get_record_mode())
+        mode_combo = ttk.Combobox(mode_frame, textvariable=self.record_mode_var,
+                                   values=['motion', 'face', 'new_face'], state='readonly', width=10)
+        mode_combo.pack(side=tk.LEFT, padx=5)
+        mode_combo.bind("<<ComboboxSelected>>", self.on_record_mode_changed)
+
         self.toggle_video_btn = tk.Button(bottom_frame, text="隐藏画面", command=self.toggle_video)
         self.toggle_video_btn.pack()
         if not get_show_camera():
@@ -164,6 +174,9 @@ class LockScreen:
 
     def toggle_face_boxes(self):
         save_show_face_boxes(self.face_box_var.get())
+
+    def on_record_mode_changed(self, event=None):
+        save_record_mode(self.record_mode_var.get())
 
     def toggle_video(self):
         if self.video_label.winfo_ismapped():

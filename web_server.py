@@ -88,13 +88,14 @@ def create_web_app(detect_app):
     def status():
         ls = getattr(_web_app.detect_app, '_lock_screen', None)
         mode = ls.mode if ls else None
-        from movingDetect import get_recording_duration, get_show_face_boxes
+        from movingDetect import get_recording_duration, get_show_face_boxes, get_record_mode
         return jsonify({
             'detecting': _web_app.detect_app.enable_detect,
             'camera_index': _web_app.detect_app._camera_idx if hasattr(_web_app.detect_app, '_camera_idx') else 0,
             'mode': mode,
             'recording_duration': get_recording_duration(),
-            'show_face_boxes': get_show_face_boxes()
+            'show_face_boxes': get_show_face_boxes(),
+            'record_mode': get_record_mode()
         })
 
     @_web_app.route('/api/set_recording_duration', methods=['POST'])
@@ -112,6 +113,16 @@ def create_web_app(detect_app):
         enabled = bool(data.get('enabled', False))
         save_show_face_boxes(enabled)
         return jsonify({'show_face_boxes': enabled})
+
+    @_web_app.route('/api/set_record_mode', methods=['POST'])
+    def set_record_mode():
+        from movingDetect import save_record_mode
+        data = request.get_json(force=True)
+        mode = data.get('mode', 'motion')
+        if mode not in ('motion', 'face', 'new_face'):
+            mode = 'motion'
+        save_record_mode(mode)
+        return jsonify({'record_mode': mode})
 
     @_web_app.route('/api/toggle_detect', methods=['POST'])
     def toggle_detect():

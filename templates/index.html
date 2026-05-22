@@ -133,6 +133,14 @@ select { padding: 8px 12px; border-radius: 8px; border: 1px solid #0f3460; backg
                 <label style="font-size:13px;color:#888;white-space:nowrap;">显示人脸框</label>
                 <button id="faceBoxBtn" class="btn btn-primary" style="padding:6px 12px;font-size:13px;" onclick="toggleFaceBoxes()">关闭</button>
             </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <label style="font-size:13px;color:#888;white-space:nowrap;">录制触发</label>
+                <select id="recordModeSelect" style="padding:6px 8px;border-radius:8px;border:1px solid #0f3460;background:#1a1a2e;color:#eee;font-size:13px;" onchange="saveRecordMode()">
+                    <option value="motion">任何移动</option>
+                    <option value="face">有人脸</option>
+                    <option value="new_face">有新人脸</option>
+                </select>
+            </div>
             <div style="font-size:13px;color:#888;margin-top:4px;">
                 当前状态：<span id="detectStatus">未知</span>
                 <span id="modeStatus" style="margin-left:8px;"></span>
@@ -247,6 +255,7 @@ fetch('/api/status').then(r => r.json()).then(d => {
     currentMode = d.mode || null;
     showFaceBoxes = d.show_face_boxes || false;
     if (d.recording_duration) durationInput.value = d.recording_duration;
+    if (d.record_mode) document.getElementById('recordModeSelect').value = d.record_mode;
     updateUI();
     updateModeUI();
     updateFaceBoxUI();
@@ -481,6 +490,15 @@ function doCleanup() {
     fetch('/api/cleanup', { method: 'POST' })
         .then(r => r.json())
         .then(d => { alert('清理完成：删除 ' + d.removed_videos + ' 条视频记录，' + d.removed_persons + ' 个孤立人脸'); loadVideos(); loadPersons(); });
+}
+
+function saveRecordMode() {
+    var mode = document.getElementById('recordModeSelect').value;
+    fetch('/api/set_record_mode', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({mode: mode})
+    });
 }
 
 function deletePerson(id) {

@@ -65,6 +65,16 @@ def save_show_camera(enabled: bool) -> None:
     config = load_config()
     config['show_camera'] = enabled
     save_config(config)
+
+
+def get_record_mode() -> str:
+    return load_config().get('record_mode', 'motion')
+
+
+def save_record_mode(mode: str) -> None:
+    config = load_config()
+    config['record_mode'] = mode
+    save_config(config)
 _cached_cameras = None
 
 
@@ -311,6 +321,7 @@ class App:
         last_alert_time = 0
         recording = False
         last_face_detect_time = 0
+        person_cooldown: dict[int, float] = {}
 
         if self.enable_detect: logger.info("开始检测...")
 
@@ -343,7 +354,32 @@ class App:
                     if change_percentage > 10:
                         current_time = time.time()
                         if current_time - last_alert_time > debounce_time:
+                            record_mode = get_record_mode()
+                            should_record = True
+
+                            if record_mode in ('face', 'new_face'):
+                                should_record = False
+                                with self._frame_lock:
+                                    boxes = list(self._face_boxes)
+                                for top, right, bottom, left, label in boxes:
+                                    if record_mode == 'face':
+                                        should_record = True
+                                        break
+                                    if record_mode == 'new_face' and label.startswith('#'):
+                                        pid = int(label[1:])
+                                        if current_time - person_cooldown.get(pid, 0) > 60:
+                                            should_record = True
+                                            break
+
+                            if not should_record:
+                                gray1 = gray2
+                                continue
+
                             last_alert_time = current_time
+                            with self._frame_lock:
+                                for top, right, bottom, left, label in self._face_boxes:
+                                    if label.startswith('#'):
+                                        person_cooldown[int(label[1:])] = current_time
 
                             if onDetected is not None:
                                 onDetectedTask = threading.Thread(target=lambda: onDetected(frame2))
