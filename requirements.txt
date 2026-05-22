@@ -5,3 +5,5 @@ Pillow
 pystray
 flask
 pyaudio
+onnxruntime
+insightface

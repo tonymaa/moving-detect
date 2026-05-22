@@ -210,4 +210,9 @@ logs/
 video/
 .idea/
 
+# Privacy: face data & config
+faces.db
+faces/
+config.json
+
 *.bat

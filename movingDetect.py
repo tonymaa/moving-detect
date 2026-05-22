@@ -141,6 +141,68 @@ def _mux_audio_video(video_path, audio_path):
             os.remove(audio_path)
 
 
+_face_app = None
+
+
+def _get_face_app():
+    global _face_app
+    if _face_app is None:
+        from insightface.app import FaceAnalysis
+        _face_app = FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider'])
+        _face_app.prepare(ctx_id=0, det_size=(640, 640))
+        logger.info("InsightFace 模型加载完成")
+    return _face_app
+
+
+def _detect_faces(frame, video_filename, app):
+    try:
+        import face_db
+        face_app = _get_face_app()
+    except Exception as e:
+        logger.warning(f"人脸检测库未就绪，跳过: {e}")
+        app._face_detecting = False
+        return
+    try:
+        faces = face_app.get(frame)
+        if not faces:
+            with app._frame_lock:
+                app._face_boxes = []
+            return
+        boxes = []
+        for face in faces:
+            bbox = face.bbox.astype(int)
+            x1, y1, x2, y2 = bbox
+            encoding = face.embedding
+            person_id = face_db.match_face(encoding)
+            if person_id is None:
+                crop = frame[y1:y2, x1:x2]
+                if crop.size == 0:
+                    continue
+                _, crop_bytes = cv2.imencode('.jpg', crop, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                person_id = face_db.add_unknown_face(encoding, crop_bytes.tobytes())
+            else:
+                face_db.add_encoding(person_id, encoding)
+            if video_filename:
+                face_db.add_video_face(video_filename, person_id)
+            person = face_db.get_person(person_id)
+            label = person['name'] if person and person['name'] else f'#{person_id}'
+            boxes.append((y1, x2, y2, x1, label))
+        with app._frame_lock:
+            app._face_boxes = boxes
+        if video_filename:
+            annotated = frame.copy()
+            for top, right, bottom, left, label in boxes:
+                cv2.rectangle(annotated, (left, top), (right, bottom), (0, 255, 0), 2)
+                cv2.putText(annotated, label, (left, top - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            base_name = os.path.splitext(video_filename)[0]
+            thumb_path = os.path.join('./video', base_name + '.jpg')
+            cv2.imwrite(thumb_path, annotated)
+    except Exception as e:
+        logger.warning(f"人脸检测异常: {e}")
+    finally:
+        app._face_detecting = False
+
+
 # 设置日志记录
 log_dir = './logs'
 os.makedirs(log_dir, exist_ok=True)
@@ -182,6 +244,8 @@ class App:
         self._latest_jpeg = None
         self._frame_lock = threading.Lock()
         self._notification_callbacks = []
+        self._face_boxes = []
+        self._face_detecting = False
 
     def stop(self):
         self._stop_event.set()
@@ -226,6 +290,7 @@ class App:
         debounce_time = 2
         last_alert_time = 0
         recording = False
+        last_face_detect_time = 0
 
         if self.enable_detect: logger.info("开始检测...")
 
@@ -236,6 +301,14 @@ class App:
                     logger.warning("摄像头读取失败，重试中...")
                     time.sleep(0.1)
                     continue
+
+                # Face detection every ~1s
+                current_time = time.time()
+                if not self._face_detecting and current_time - last_face_detect_time >= 1.0:
+                    last_face_detect_time = current_time
+                    self._face_detecting = True
+                    vf = os.path.basename(video_filename) if recording else None
+                    threading.Thread(target=_detect_faces, args=(frame2.copy(), vf, self), daemon=True).start()
 
                 gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
                 gray2 = cv2.GaussianBlur(gray2, (21, 21), 0)
@@ -275,6 +348,7 @@ class App:
                             audio_recorder = AudioRecorder(audio_path)
                             audio_recorder.start()
                             start_time = time.time()
+                            last_face_detect_time = 0
 
                 if recording:
                     out.write(frame2)
@@ -288,8 +362,12 @@ class App:
                 gray1 = gray2
 
                 with self._frame_lock:
-                    self.latest_frame = frame2.copy()
-                    _, buf = cv2.imencode('.jpg', frame2, [cv2.IMWRITE_JPEG_QUALITY, 70])
+                    display = frame2.copy()
+                    for top, right, bottom, left, label in self._face_boxes:
+                        cv2.rectangle(display, (left, top), (right, bottom), (0, 255, 0), 2)
+                        cv2.putText(display, label, (left, top - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                    self.latest_frame = display
+                    _, buf = cv2.imencode('.jpg', display, [cv2.IMWRITE_JPEG_QUALITY, 70])
                     self._latest_jpeg = buf.tobytes()
 
                 if onGetFrame is not None:

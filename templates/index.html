@@ -40,7 +40,7 @@ select { padding: 8px 12px; border-radius: 8px; border: 1px solid #0f3460; backg
 .notif-item .msg { margin-top: 4px; }
 
 /* Video list */
-.video-list { max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.video-list { max-height: 500px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .video-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #1a1a2e; border-radius: 8px; cursor: pointer; transition: background .15s; }
 .video-item:hover { background: #0f3460; }
 .video-item .thumb { width: 80px; height: 45px; object-fit: cover; border-radius: 4px; flex-shrink: 0; background: #000; }
@@ -48,11 +48,28 @@ select { padding: 8px 12px; border-radius: 8px; border: 1px solid #0f3460; backg
 .video-item .info { flex: 1; min-width: 0; }
 .video-item .name { font-size: 13px; }
 .video-item .meta { font-size: 12px; color: #888; }
+.video-item .level { font-size: 11px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+.level-stranger { background: #ff5252; color: #fff; }
+.level-known { background: #00c853; color: #000; }
+.level-motion { background: #555; color: #ccc; }
 .video-player { width: 100%; border-radius: 8px; margin-top: 10px; background: #000; }
+.video-faces { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.video-face { display: flex; align-items: center; gap: 4px; background: #0f3460; border-radius: 8px; padding: 4px 8px; font-size: 12px; }
+.video-face img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
+
+/* Face management */
+.face-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; max-height: 300px; overflow-y: auto; }
+.face-card { background: #1a1a2e; border-radius: 8px; padding: 10px; text-align: center; position: relative; }
+.face-card img { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; margin-bottom: 6px; }
+.face-card .face-name { font-size: 13px; color: #eee; }
+.face-card .face-name-input { width: 100%; background: #0f3460; border: 1px solid #53a8b6; border-radius: 4px; color: #eee; padding: 2px 4px; font-size: 12px; text-align: center; }
+.face-card .face-count { font-size: 11px; color: #888; margin-top: 2px; }
+.face-card .face-delete { position: absolute; top: 4px; right: 4px; background: none; border: none; color: #ff5252; cursor: pointer; font-size: 14px; }
+.face-filters { display: flex; gap: 8px; margin-bottom: 10px; }
+.face-filter { padding: 4px 10px; border-radius: 12px; font-size: 12px; cursor: pointer; border: 1px solid #0f3460; background: transparent; color: #888; }
+.face-filter.active { background: #0f3460; color: #eee; }
 
 .empty-msg { text-align: center; color: #555; padding: 30px; font-size: 14px; }
-
-/* Full-width cards */
 .full-width { grid-column: 1 / -1; }
 </style>
 </head>
@@ -106,6 +123,7 @@ select { padding: 8px 12px; border-radius: 8px; border: 1px solid #0f3460; backg
                 <span id="playingName" style="font-size:12px;color:#888;"></span>
             </div>
             <img id="videoPlayer" class="video-player" style="display:none;width:100%;border-radius:8px;background:#000;" alt="video">
+            <div id="playingFaces" class="video-faces" style="display:none;"></div>
         </div>
     </div>
 
@@ -124,6 +142,19 @@ select { padding: 8px 12px; border-radius: 8px; border: 1px solid #0f3460; backg
             <div class="empty-msg">加载中...</div>
         </div>
     </div>
+
+    <!-- Face Management -->
+    <div class="card full-width">
+        <div class="card-title">人脸管理</div>
+        <div class="face-filters">
+            <button class="face-filter active" onclick="filterFaces('all', this)">全部</button>
+            <button class="face-filter" onclick="filterFaces('unnamed', this)">未命名</button>
+            <button class="face-filter" onclick="filterFaces('named', this)">已命名</button>
+        </div>
+        <div id="faceGrid" class="face-grid">
+            <div class="empty-msg">暂无人脸数据</div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -135,11 +166,15 @@ const notifCount = document.getElementById('notifCount');
 const videoList = document.getElementById('videoList');
 const videoPlayer = document.getElementById('videoPlayer');
 const playingName = document.getElementById('playingName');
+const playingFaces = document.getElementById('playingFaces');
 const cameraSelect = document.getElementById('cameraSelect');
 
 let detecting = false;
 let currentMode = null;
 let notifications = [];
+let allPersons = [];
+let currentFaceFilter = 'all';
+let videosCache = [];
 
 const lockButtons = document.getElementById('lockButtons');
 const durationInput = document.getElementById('durationInput');
@@ -183,7 +218,9 @@ function saveDuration() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({duration: val})
     }).then(r => r.json()).then(d => { durationInput.value = d.recording_duration; });
-}// Load cameras
+}
+
+// Load cameras
 fetch('/api/cameras').then(r => r.json()).then(cameras => {
     cameraSelect.innerHTML = '';
     cameras.forEach(c => {
@@ -200,6 +237,7 @@ fetch('/api/cameras').then(r => r.json()).then(cameras => {
 // Load videos
 function loadVideos() {
     fetch('/api/videos').then(r => r.json()).then(files => {
+        videosCache = files;
         if (!files.length) {
             videoList.innerHTML = '<div class="empty-msg">暂无录制视频</div>';
             return;
@@ -211,8 +249,12 @@ function loadVideos() {
             const thumbHtml = f.thumb
                 ? `<img class="thumb" src="/api/thumb/${f.filename.replace(/\.\w+$/, '.jpg')}" alt="thumb">`
                 : `<div class="no-thumb">无图</div>`;
-            item.innerHTML = `${thumbHtml}<div class="info"><div class="name">${f.display}</div></div><div class="meta">${f.size_mb} MB</div>`;
-            item.onclick = () => playVideo(f.filename, f.display);
+            const facesHtml = f.faces.length
+                ? f.faces.map(p => `<img src="${p.photo_url}" title="${p.name || '未命名'}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;">`).join('')
+                : '';
+            const levelClass = `level-${f.level_type}`;
+            item.innerHTML = `${thumbHtml}<div class="info"><div class="name">${f.display}</div><div style="display:flex;gap:4px;margin-top:4px;align-items:center;">${facesHtml}</div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;"><span class="level ${levelClass}">${f.level}</span><span class="meta">${f.size_mb} MB</span></div>`;
+            item.onclick = () => playVideo(f);
             videoList.appendChild(item);
         });
     });
@@ -220,10 +262,19 @@ function loadVideos() {
 loadVideos();
 setInterval(loadVideos, 30000);
 
-function playVideo(filename, display) {
-    videoPlayer.src = '/api/play/' + filename;
+function playVideo(v) {
+    videoPlayer.src = '/api/play/' + v.filename;
     videoPlayer.style.display = 'block';
-    playingName.textContent = display;
+    playingName.textContent = v.display;
+    if (v.faces.length) {
+        playingFaces.style.display = 'flex';
+        playingFaces.innerHTML = v.faces.map(p =>
+            `<div class="video-face"><img src="${p.photo_url}"><span>${p.name || '未命名'}</span></div>`
+        ).join('');
+    } else {
+        playingFaces.style.display = 'none';
+        playingFaces.innerHTML = '';
+    }
 }
 
 function updateUI() {
@@ -258,6 +309,61 @@ function triggerExitLock() {
         .then(d => { if (d.status !== 'ok') alert(d.message || '操作失败'); });
 }
 
+// Face management
+function loadPersons() {
+    fetch('/api/persons').then(r => r.json()).then(persons => {
+        allPersons = persons;
+        renderFaces();
+    });
+}
+loadPersons();
+
+function filterFaces(filter, btn) {
+    currentFaceFilter = filter;
+    document.querySelectorAll('.face-filter').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderFaces();
+}
+
+function renderFaces() {
+    const grid = document.getElementById('faceGrid');
+    let filtered = allPersons;
+    if (currentFaceFilter === 'unnamed') filtered = allPersons.filter(p => !p.name);
+    else if (currentFaceFilter === 'named') filtered = allPersons.filter(p => p.name);
+
+    if (!filtered.length) {
+        grid.innerHTML = '<div class="empty-msg">暂无人脸数据</div>';
+        return;
+    }
+    grid.innerHTML = '';
+    filtered.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'face-card';
+        card.innerHTML = `
+            <button class="face-delete" onclick="deletePerson(${p.id})" title="删除">&times;</button>
+            <img src="/api/persons/${p.id}/photo" alt="face">
+            <div class="face-name">${p.name || '<span style="color:#888">未命名</span>'}</div>
+            <input class="face-name-input" placeholder="输入名字" value="${p.name || ''}" onchange="renamePerson(${p.id}, this.value)">
+            <div class="face-count">出现 ${p.video_count || 0} 次</div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+function renamePerson(id, name) {
+    fetch(`/api/persons/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: name})
+    }).then(() => { loadPersons(); loadVideos(); });
+}
+
+function deletePerson(id) {
+    if (!confirm('确定删除此人脸？')) return;
+    fetch(`/api/persons/${id}`, { method: 'DELETE' })
+        .then(() => { loadPersons(); loadVideos(); });
+}
+
 // SSE notifications
 const evtSource = new EventSource('/api/notifications');
 evtSource.onmessage = function(e) {
@@ -271,6 +377,7 @@ evtSource.onmessage = function(e) {
     if (notifications.length > 100) notifications.pop();
     renderNotifications();
     loadVideos();
+    loadPersons();
 };
 
 function renderNotifications() {

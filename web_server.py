@@ -91,6 +91,33 @@ def create_web_app(detect_app):
             return jsonify({'status': 'ok'})
         return jsonify({'status': 'error', 'message': '桌面端未运行'}), 400
 
+    @_web_app.route('/api/persons')
+    def persons():
+        import face_db
+        return jsonify(face_db.get_all_persons())
+
+    @_web_app.route('/api/persons/<int:person_id>', methods=['PUT'])
+    def update_person(person_id):
+        import face_db
+        data = request.get_json(force=True)
+        face_db.update_person_name(person_id, data.get('name', ''))
+        return jsonify({'status': 'ok'})
+
+    @_web_app.route('/api/persons/<int:person_id>', methods=['DELETE'])
+    def delete_person(person_id):
+        import face_db
+        face_db.delete_person(person_id)
+        return jsonify({'status': 'ok'})
+
+    @_web_app.route('/api/persons/<int:person_id>/photo')
+    def person_photo(person_id):
+        import face_db
+        person = face_db.get_person(person_id)
+        if person and person['photo_path'] and os.path.exists(person['photo_path']):
+            return send_from_directory(os.path.dirname(person['photo_path']),
+                                       os.path.basename(person['photo_path']))
+        return '', 404
+
     @_web_app.route('/api/cameras')
     def cameras():
         from movingDetect import get_cached_cameras
@@ -98,7 +125,9 @@ def create_web_app(detect_app):
 
     @_web_app.route('/api/videos')
     def videos():
+        import face_db
         video_dir = _web_app.detect_app.video_dir
+        videos_faces = face_db.get_videos_with_faces()
         files = []
         if os.path.exists(video_dir):
             for f in sorted(os.listdir(video_dir), reverse=True):
@@ -112,7 +141,30 @@ def create_web_app(detect_app):
                         display = dt.strftime("%Y-%m-%d %H:%M:%S")
                     except ValueError:
                         display = name
-                    files.append({'filename': f, 'display': display, 'size_mb': round(size_mb, 2), 'thumb': has_thumb})
+                    faces = videos_faces.get(f, [])
+                    has_unnamed = any(p['name'] is None for p in faces)
+                    named = [p['name'] for p in faces if p['name']]
+                    if not faces:
+                        level = '摄像头移动'
+                        level_type = 'motion'
+                    elif has_unnamed:
+                        level = '有陌生人走动'
+                        level_type = 'stranger'
+                    else:
+                        level = '熟人: ' + ', '.join(named)
+                        level_type = 'known'
+                    files.append({
+                        'filename': f, 'display': display, 'size_mb': round(size_mb, 2),
+                        'thumb': has_thumb, 'faces': faces, 'level': level, 'level_type': level_type
+                    })
+        def sort_key(v):
+            t = v['level_type']
+            if t == 'stranger':
+                return (0, v['display'])
+            if t == 'known':
+                return (1, v['display'])
+            return (2, v['display'])
+        files.sort(key=sort_key)
         return jsonify(files)
 
     @_web_app.route('/api/thumb/<filename>')
