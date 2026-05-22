@@ -58,12 +58,10 @@ def create_web_app(detect_app):
     @_web_app.route('/api/login', methods=['POST'])
     def login():
         data = request.get_json(force=True)
-        key_hash = data.get('key_hash', '')
-        for key in _get_access_keys():
-            expected = hashlib.sha256(key.encode()).hexdigest()
-            if key_hash == expected:
-                session['authenticated'] = True
-                return jsonify({'status': 'ok'})
+        key = data.get('key', '')
+        if key in _get_access_keys():
+            session['authenticated'] = True
+            return jsonify({'status': 'ok'})
         return jsonify({'status': 'error', 'message': '密钥错误'}), 403
 
     @_web_app.route('/api/logout', methods=['POST'])
