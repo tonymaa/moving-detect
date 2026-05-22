@@ -45,6 +45,16 @@ def save_recording_duration(duration: int) -> None:
     config = load_config()
     config['recording_duration'] = max(5, min(300, duration))
     save_config(config)
+
+
+def get_show_face_boxes() -> bool:
+    return load_config().get('show_face_boxes', False)
+
+
+def save_show_face_boxes(enabled: bool) -> None:
+    config = load_config()
+    config['show_face_boxes'] = enabled
+    save_config(config)
 _cached_cameras = None
 
 
@@ -363,9 +373,10 @@ class App:
 
                 with self._frame_lock:
                     display = frame2.copy()
-                    for top, right, bottom, left, label in self._face_boxes:
-                        cv2.rectangle(display, (left, top), (right, bottom), (0, 255, 0), 2)
-                        cv2.putText(display, label, (left, top - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                    if get_show_face_boxes():
+                        for top, right, bottom, left, label in self._face_boxes:
+                            cv2.rectangle(display, (left, top), (right, bottom), (0, 255, 0), 2)
+                            cv2.putText(display, label, (left, top - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
                     self.latest_frame = display
                     _, buf = cv2.imencode('.jpg', display, [cv2.IMWRITE_JPEG_QUALITY, 70])
                     self._latest_jpeg = buf.tobytes()

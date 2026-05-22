@@ -110,6 +110,10 @@ select { padding: 8px 12px; border-radius: 8px; border: 1px solid #0f3460; backg
                 <input id="durationInput" type="number" min="5" max="300" value="15" style="width:60px;padding:6px 8px;border-radius:8px;border:1px solid #0f3460;background:#1a1a2e;color:#eee;font-size:14px;">
                 <button class="btn btn-primary" style="padding:6px 12px;font-size:13px;" onclick="saveDuration()">保存</button>
             </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <label style="font-size:13px;color:#888;white-space:nowrap;">显示人脸框</label>
+                <button id="faceBoxBtn" class="btn btn-primary" style="padding:6px 12px;font-size:13px;" onclick="toggleFaceBoxes()">关闭</button>
+            </div>
             <div style="font-size:13px;color:#888;margin-top:4px;">
                 当前状态：<span id="detectStatus">未知</span>
                 <span id="modeStatus" style="margin-left:8px;"></span>
@@ -180,6 +184,9 @@ const lockButtons = document.getElementById('lockButtons');
 const durationInput = document.getElementById('durationInput');
 const exitLockBtn = document.getElementById('exitLockBtn');
 const modeStatus = document.getElementById('modeStatus');
+const faceBoxBtn = document.getElementById('faceBoxBtn');
+
+let showFaceBoxes = false;
 
 function updateModeUI() {
     if (currentMode === 'ScreenSaver') {
@@ -205,9 +212,11 @@ function updateModeUI() {
 fetch('/api/status').then(r => r.json()).then(d => {
     detecting = d.detecting;
     currentMode = d.mode || null;
+    showFaceBoxes = d.show_face_boxes || false;
     if (d.recording_duration) durationInput.value = d.recording_duration;
     updateUI();
     updateModeUI();
+    updateFaceBoxUI();
 });
 
 function saveDuration() {
@@ -218,6 +227,20 @@ function saveDuration() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({duration: val})
     }).then(r => r.json()).then(d => { durationInput.value = d.recording_duration; });
+}
+
+function toggleFaceBoxes() {
+    showFaceBoxes = !showFaceBoxes;
+    fetch('/api/set_show_face_boxes', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({enabled: showFaceBoxes})
+    }).then(r => r.json()).then(d => { showFaceBoxes = d.show_face_boxes; updateFaceBoxUI(); });
+}
+
+function updateFaceBoxUI() {
+    faceBoxBtn.textContent = showFaceBoxes ? '开启' : '关闭';
+    faceBoxBtn.className = 'btn ' + (showFaceBoxes ? 'btn-success' : 'btn-primary');
 }
 
 // Load cameras

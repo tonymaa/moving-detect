@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk, ImageEnhance
 import pystray
-from movingDetect import App, list_cameras, get_camera_index, save_camera_index, load_config, get_recording_duration, save_recording_duration
+from movingDetect import App, list_cameras, get_camera_index, save_camera_index, load_config, get_recording_duration, save_recording_duration, get_show_face_boxes, save_show_face_boxes
 import webbrowser
 import web_server
 from enum import Enum
@@ -105,6 +105,12 @@ class LockScreen:
         tk.Button(dur_frame, text="保存", command=self.save_duration).pack(side=tk.LEFT)
 
         self.monitor_camera.enable_detect = False
+
+        # 显示人脸框开关
+        self.face_box_var = tk.BooleanVar(value=get_show_face_boxes())
+        face_box_cb = tk.Checkbutton(bottom_frame, text="显示人脸框", variable=self.face_box_var, command=self.toggle_face_boxes)
+        face_box_cb.pack()
+
         self.toggle_video_btn = tk.Button(bottom_frame, text="隐藏画面", command=self.toggle_video)
         self.toggle_video_btn.pack()
         self.toggle_detect_btn = tk.Button(bottom_frame, text= "关闭检测" if self.monitor_camera.enable_detect else "开启检测", command=self.toggle_detect)
@@ -152,6 +158,9 @@ class LockScreen:
             val = 15
         self.duration_var.set(str(val))
         save_recording_duration(val)
+
+    def toggle_face_boxes(self):
+        save_show_face_boxes(self.face_box_var.get())
 
     def toggle_video(self):
         if self.video_label.winfo_ismapped():
