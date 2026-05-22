@@ -75,6 +75,16 @@ def save_record_mode(mode: str) -> None:
     config = load_config()
     config['record_mode'] = mode
     save_config(config)
+
+
+def get_trigger_person_ids() -> list[int]:
+    return load_config().get('trigger_person_ids', [])
+
+
+def save_trigger_person_ids(ids: list[int]) -> None:
+    config = load_config()
+    config['trigger_person_ids'] = ids
+    save_config(config)
 _cached_cameras = None
 
 
@@ -216,12 +226,12 @@ def _detect_faces(frame, video_filename, app):
                 face_db.add_video_face(video_filename, person_id)
             person = face_db.get_person(person_id)
             label = person['name'] if person and person['name'] else f'#{person_id}'
-            boxes.append((y1, x2, y2, x1, label))
+            boxes.append((y1, x2, y2, x1, label, person_id))
         with app._frame_lock:
             app._face_boxes = boxes
         if video_filename:
             annotated = frame.copy()
-            for top, right, bottom, left, label in boxes:
+            for top, right, bottom, left, label, _pid in boxes:
                 cv2.rectangle(annotated, (left, top), (right, bottom), (0, 255, 0), 2)
                 cv2.putText(annotated, label, (left, top - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
             base_name = os.path.splitext(video_filename)[0]
@@ -357,17 +367,21 @@ class App:
                             record_mode = get_record_mode()
                             should_record = True
 
-                            if record_mode in ('face', 'new_face'):
+                            if record_mode in ('face', 'new_face', 'specific_face'):
                                 should_record = False
                                 with self._frame_lock:
                                     boxes = list(self._face_boxes)
-                                for top, right, bottom, left, label in boxes:
+                                for top, right, bottom, left, label, pid in boxes:
                                     if record_mode == 'face':
                                         should_record = True
                                         break
                                     if record_mode == 'new_face' and label.startswith('#'):
-                                        pid = int(label[1:])
                                         if current_time - person_cooldown.get(pid, 0) > 60:
+                                            should_record = True
+                                            break
+                                    if record_mode == 'specific_face':
+                                        trigger_ids = get_trigger_person_ids()
+                                        if pid in trigger_ids:
                                             should_record = True
                                             break
 
@@ -377,9 +391,9 @@ class App:
 
                             last_alert_time = current_time
                             with self._frame_lock:
-                                for top, right, bottom, left, label in self._face_boxes:
+                                for top, right, bottom, left, label, pid in self._face_boxes:
                                     if label.startswith('#'):
-                                        person_cooldown[int(label[1:])] = current_time
+                                        person_cooldown[pid] = current_time
 
                             if onDetected is not None:
                                 onDetectedTask = threading.Thread(target=lambda: onDetected(frame2))
@@ -420,7 +434,7 @@ class App:
                 with self._frame_lock:
                     display = frame2.copy()
                     if get_show_face_boxes():
-                        for top, right, bottom, left, label in self._face_boxes:
+                        for top, right, bottom, left, label, _pid in self._face_boxes:
                             cv2.rectangle(display, (left, top), (right, bottom), (0, 255, 0), 2)
                             cv2.putText(display, label, (left, top - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
                     self.latest_frame = display

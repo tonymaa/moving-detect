@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk, ImageEnhance
 import pystray
-from movingDetect import App, list_cameras, get_camera_index, save_camera_index, load_config, get_recording_duration, save_recording_duration, get_show_face_boxes, save_show_face_boxes, get_show_camera, save_show_camera, get_record_mode, save_record_mode
+from movingDetect import App, list_cameras, get_camera_index, save_camera_index, load_config, get_recording_duration, save_recording_duration, get_show_face_boxes, save_show_face_boxes, get_show_camera, save_show_camera, get_record_mode, save_record_mode, get_trigger_person_ids, save_trigger_person_ids
 import webbrowser
 import web_server
 from enum import Enum
@@ -117,9 +117,15 @@ class LockScreen:
         tk.Label(mode_frame, text="录制触发:").pack(side=tk.LEFT)
         self.record_mode_var = tk.StringVar(value=get_record_mode())
         mode_combo = ttk.Combobox(mode_frame, textvariable=self.record_mode_var,
-                                   values=['motion', 'face', 'new_face'], state='readonly', width=10)
+                                   values=['motion', 'face', 'new_face', 'specific_face'], state='readonly', width=12)
         mode_combo.pack(side=tk.LEFT, padx=5)
         mode_combo.bind("<<ComboboxSelected>>", self.on_record_mode_changed)
+
+        self.trigger_person_btn = tk.Button(bottom_frame, text="选择触发人脸", command=self.open_trigger_person_dialog)
+        if get_record_mode() != 'specific_face':
+            self.trigger_person_btn.pack_forget()
+        else:
+            self.trigger_person_btn.pack()
 
         self.toggle_video_btn = tk.Button(bottom_frame, text="隐藏画面", command=self.toggle_video)
         self.toggle_video_btn.pack()
@@ -176,7 +182,35 @@ class LockScreen:
         save_show_face_boxes(self.face_box_var.get())
 
     def on_record_mode_changed(self, event=None):
-        save_record_mode(self.record_mode_var.get())
+        mode = self.record_mode_var.get()
+        save_record_mode(mode)
+        if mode == 'specific_face':
+            self.trigger_person_btn.pack()
+        else:
+            self.trigger_person_btn.pack_forget()
+
+    def open_trigger_person_dialog(self):
+        import face_db
+        persons = face_db.get_all_persons()
+        if not persons:
+            return
+        dialog = tk.Toplevel(self.master)
+        dialog.title("选择触发人脸")
+        dialog.geometry("250x300")
+        dialog.transient(self.master)
+        dialog.grab_set()
+        trigger_ids = get_trigger_person_ids()
+        vars_ = {}
+        for p in persons:
+            var = tk.BooleanVar(value=p['id'] in trigger_ids)
+            vars_[p['id']] = var
+            name = p['name'] or f"未命名 #{p['id']}"
+            tk.Checkbutton(dialog, text=name, variable=var).pack(anchor='w', padx=10)
+        def save():
+            ids = [pid for pid, v in vars_.items() if v.get()]
+            save_trigger_person_ids(ids)
+            dialog.destroy()
+        tk.Button(dialog, text="确定", command=save).pack(pady=10)
 
     def toggle_video(self):
         if self.video_label.winfo_ismapped():
