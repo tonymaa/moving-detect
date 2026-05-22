@@ -77,7 +77,10 @@ select { padding: 8px 12px; border-radius: 8px; border: 1px solid #0f3460; backg
 
 <div class="header">
     <h1>移动监控</h1>
-    <span id="statusBadge" class="status-badge status-off">检测关闭</span>
+    <div style="display:flex;align-items:center;gap:12px;">
+        <span id="statusBadge" class="status-badge status-off">检测关闭</span>
+        <button id="logoutBtn" class="btn btn-danger" style="padding:4px 12px;font-size:12px;display:none;" onclick="doLogout()">退出登录</button>
+    </div>
 </div>
 
 <div class="container">
@@ -185,6 +188,7 @@ const durationInput = document.getElementById('durationInput');
 const exitLockBtn = document.getElementById('exitLockBtn');
 const modeStatus = document.getElementById('modeStatus');
 const faceBoxBtn = document.getElementById('faceBoxBtn');
+const logoutBtn = document.getElementById('logoutBtn');
 
 let showFaceBoxes = false;
 
@@ -242,6 +246,14 @@ function updateFaceBoxUI() {
     faceBoxBtn.textContent = showFaceBoxes ? '开启' : '关闭';
     faceBoxBtn.className = 'btn ' + (showFaceBoxes ? 'btn-success' : 'btn-primary');
 }
+
+function doLogout() {
+    fetch('/api/logout', { method: 'POST' }).then(() => { window.location.href = '/login'; });
+}
+
+fetch('/api/auth_status').then(r => r.json()).then(d => {
+    if (d.auth_enabled) logoutBtn.style.display = 'inline-block';
+});
 
 // Load cameras
 fetch('/api/cameras').then(r => r.json()).then(cameras => {

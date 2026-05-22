@@ -2,10 +2,11 @@ import os
 import io
 import time
 import json
+import hashlib
 import threading
 import queue
 from datetime import datetime
-from flask import Flask, Response, render_template, jsonify, request, send_from_directory
+from flask import Flask, Response, render_template, jsonify, request, send_from_directory, session, redirect
 import cv2
 from PIL import Image
 
@@ -21,9 +22,58 @@ def create_web_app(detect_app):
     _web_app.detect_app = detect_app
     _web_app.notification_queues = []
 
+    def _get_access_keys():
+        from movingDetect import load_config
+        return load_config().get('access_keys', [])
+
+    def _is_auth_enabled():
+        return bool(_get_access_keys())
+
+    @_web_app.before_request
+    def _check_auth():
+        if not _is_auth_enabled():
+            return None
+        if request.path in ('/login', '/api/login'):
+            return None
+        if session.get('authenticated'):
+            return None
+        if request.path.startswith('/api/'):
+            return jsonify({'error': 'unauthorized'}), 401
+        return redirect('/login')
+
+    # Set secret_key for session signing
+    keys = _get_access_keys()
+    _web_app.secret_key = hashlib.sha256(keys[0].encode()).hexdigest() if keys else os.urandom(24).hex()
+
     @_web_app.route('/')
     def index():
         return render_template('index.html')
+
+    @_web_app.route('/login')
+    def login_page():
+        if not _is_auth_enabled() or session.get('authenticated'):
+            return redirect('/')
+        return render_template('login.html')
+
+    @_web_app.route('/api/login', methods=['POST'])
+    def login():
+        data = request.get_json(force=True)
+        key_hash = data.get('key_hash', '')
+        for key in _get_access_keys():
+            expected = hashlib.sha256(key.encode()).hexdigest()
+            if key_hash == expected:
+                session['authenticated'] = True
+                return jsonify({'status': 'ok'})
+        return jsonify({'status': 'error', 'message': '密钥错误'}), 403
+
+    @_web_app.route('/api/logout', methods=['POST'])
+    def logout():
+        session.pop('authenticated', None)
+        return jsonify({'status': 'ok'})
+
+    @_web_app.route('/api/auth_status')
+    def auth_status():
+        return jsonify({'auth_enabled': _is_auth_enabled(), 'authenticated': session.get('authenticated', False)})
 
     @_web_app.route('/api/stream')
     def stream():

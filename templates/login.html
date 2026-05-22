@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>移动监控 - 登录</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.login-card { background: #16213e; border-radius: 12px; padding: 32px; border: 1px solid #0f3460; width: 340px; }
+.login-card h1 { font-size: 20px; text-align: center; margin-bottom: 24px; color: #53a8b6; }
+.input-group { margin-bottom: 16px; }
+.input-group label { display: block; font-size: 13px; color: #888; margin-bottom: 6px; }
+.input-group input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #0f3460; background: #1a1a2e; color: #eee; font-size: 14px; outline: none; }
+.input-group input:focus { border-color: #53a8b6; }
+.btn { width: 100%; padding: 10px 16px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; background: #0f3460; color: #fff; transition: opacity .15s; }
+.btn:hover { opacity: 0.85; }
+.error { color: #ff5252; font-size: 13px; text-align: center; margin-top: 12px; min-height: 20px; }
+</style>
+</head>
+<body>
+
+<div class="login-card">
+    <h1>移动监控</h1>
+    <div class="input-group">
+        <label>访问密钥</label>
+        <input type="password" id="keyInput" placeholder="请输入密钥" autofocus>
+    </div>
+    <button class="btn" onclick="submitLogin()">登录</button>
+    <div id="errorMsg" class="error"></div>
+</div>
+
+<script>
+async function sha256(text) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(text);
+    const hash = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function submitLogin() {
+    const key = document.getElementById('keyInput').value.trim();
+    if (!key) return;
+    const hash = await sha256(key);
+    try {
+        const resp = await fetch('/api/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({key_hash: hash})
+        });
+        if (resp.ok) {
+            window.location.href = '/';
+        } else {
+            const data = await resp.json();
+            document.getElementById('errorMsg').textContent = data.message || '密钥错误';
+        }
+    } catch (e) {
+        document.getElementById('errorMsg').textContent = '网络错误';
+    }
+}
+
+document.getElementById('keyInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') submitLogin();
+});
+</script>
+</body>
+</html>
