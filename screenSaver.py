@@ -25,7 +25,7 @@ class LockScreen:
         self.master.bind("<Escape>", self.exit_fullscreen)  # 按 Esc 键退出全屏
 
         window_width = 200
-        window_height = 420
+        window_height = 440
 
         # 获取屏幕的宽度和高度
         screen_width = root.winfo_screenwidth()
