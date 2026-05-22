@@ -155,6 +155,16 @@ def get_videos_with_faces() -> dict[str, list[dict]]:
     return result
 
 
+def get_person_videos(person_id: int) -> list[str]:
+    conn = _conn()
+    rows = conn.execute(
+        "SELECT video_filename FROM video_faces WHERE person_id = ? ORDER BY video_filename DESC",
+        (person_id,)
+    ).fetchall()
+    conn.close()
+    return [r['video_filename'] for r in rows]
+
+
 def delete_person(person_id: int):
     conn = _conn()
     person = conn.execute("SELECT photo_path FROM persons WHERE id = ?", (person_id,)).fetchone()

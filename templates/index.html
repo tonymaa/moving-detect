@@ -71,6 +71,17 @@ select { padding: 8px 12px; border-radius: 8px; border: 1px solid #0f3460; backg
 
 .empty-msg { text-align: center; color: #555; padding: 30px; font-size: 14px; }
 .full-width { grid-column: 1 / -1; }
+
+/* Modal */
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100; align-items:center; justify-content:center; }
+.modal-overlay.show { display:flex; }
+.modal { background:#16213e; border-radius:12px; border:1px solid #0f3460; width:480px; max-width:90vw; max-height:80vh; display:flex; flex-direction:column; }
+.modal-header { display:flex; justify-content:space-between; align-items:center; padding:16px; border-bottom:1px solid #0f3460; }
+.modal-header h2 { font-size:15px; color:#53a8b6; }
+.modal-close { background:none; border:none; color:#888; font-size:20px; cursor:pointer; }
+.modal-close:hover { color:#eee; }
+.modal-body { padding:16px; overflow-y:auto; flex:1; }
+.modal-body .video-item { margin-bottom:6px; }
 </style>
 </head>
 <body>
@@ -163,6 +174,19 @@ select { padding: 8px 12px; border-radius: 8px; border: 1px solid #0f3460; backg
         </div>
         <div id="faceGrid" class="face-grid">
             <div class="empty-msg">暂无人脸数据</div>
+        </div>
+    </div>
+</div>
+
+<!-- Person Videos Modal -->
+<div class="modal-overlay" id="personModal" onclick="if(event.target===this)closePersonModal()">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 id="personModalTitle">出现视频</h2>
+            <button class="modal-close" onclick="closePersonModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="personModalBody">
+            <div class="empty-msg">加载中...</div>
         </div>
     </div>
 </div>
@@ -401,11 +425,13 @@ function renderFaces() {
     filtered.forEach(p => {
         const card = document.createElement('div');
         card.className = 'face-card';
+        card.style.cursor = 'pointer';
+        card.onclick = function(e) { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') showPersonVideos(p.id, p.name); };
         card.innerHTML = `
-            <button class="face-delete" onclick="deletePerson(${p.id})" title="删除">&times;</button>
+            <button class="face-delete" onclick="event.stopPropagation();deletePerson(${p.id})" title="删除">&times;</button>
             <img src="/api/persons/${p.id}/photo" alt="face">
             <div class="face-name">${p.name || '<span style="color:#888">未命名</span>'}</div>
-            <input class="face-name-input" placeholder="输入名字" value="${p.name || ''}" onchange="renamePerson(${p.id}, this.value)">
+            <input class="face-name-input" placeholder="输入名字" value="${p.name || ''}" onclick="event.stopPropagation()" onchange="renamePerson(${p.id}, this.value)">
             <div class="face-count">出现 ${p.video_count || 0} 次</div>
         `;
         grid.appendChild(card);
@@ -418,6 +444,35 @@ function renamePerson(id, name) {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({name: name})
     }).then(() => { loadPersons(); loadVideos(); });
+}
+
+function showPersonVideos(id, name) {
+    var modal = document.getElementById('personModal');
+    document.getElementById('personModalTitle').textContent = (name || '未命名') + ' - 出现视频';
+    document.getElementById('personModalBody').innerHTML = '<div class="empty-msg">加载中...</div>';
+    modal.classList.add('show');
+    fetch('/api/persons/' + id + '/videos').then(r => r.json()).then(videos => {
+        var body = document.getElementById('personModalBody');
+        if (!videos.length) {
+            body.innerHTML = '<div class="empty-msg">暂无关联视频</div>';
+            return;
+        }
+        body.innerHTML = '';
+        videos.forEach(v => {
+            var item = document.createElement('div');
+            item.className = 'video-item';
+            var thumbHtml = v.thumb
+                ? '<img class="thumb" src="/api/thumb/' + v.filename.replace(/\.\w+$/, '.jpg') + '" alt="thumb">'
+                : '<div class="no-thumb">无图</div>';
+            item.innerHTML = thumbHtml + '<div class="info"><div class="name">' + v.display + '</div></div>';
+            item.onclick = function() { closePersonModal(); playVideo(v); };
+            body.appendChild(item);
+        });
+    });
+}
+
+function closePersonModal() {
+    document.getElementById('personModal').classList.remove('show');
 }
 
 function deletePerson(id) {

@@ -175,6 +175,22 @@ def create_web_app(detect_app):
                                        os.path.basename(person['photo_path']))
         return '', 404
 
+    @_web_app.route('/api/persons/<int:person_id>/videos')
+    def person_videos(person_id):
+        import face_db
+        filenames = face_db.get_person_videos(person_id)
+        result = []
+        for f in filenames:
+            name = os.path.splitext(f)[0]
+            try:
+                dt = datetime.strptime(name, "%Y%m%d_%H%M%S")
+                display = dt.strftime("%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                display = name
+            has_thumb = os.path.exists(os.path.join(_web_app.detect_app.video_dir, name + '.jpg'))
+            result.append({'filename': f, 'display': display, 'thumb': has_thumb})
+        return jsonify(result)
+
     @_web_app.route('/api/cameras')
     def cameras():
         from movingDetect import get_cached_cameras
