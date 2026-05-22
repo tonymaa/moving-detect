@@ -2,5 +2,8 @@
   "camera_index": 0,
   "recording_duration": 30,
   "show_face_boxes": false,
-  "access_keys": ["helloworld"]
+  "access_keys": [
+    "helloworld"
+  ],
+  "show_camera": false
 }

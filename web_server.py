@@ -214,14 +214,6 @@ def create_web_app(detect_app):
                         'filename': f, 'display': display, 'size_mb': round(size_mb, 2),
                         'thumb': has_thumb, 'faces': faces, 'level': level, 'level_type': level_type
                     })
-        def sort_key(v):
-            t = v['level_type']
-            if t == 'stranger':
-                return (0, v['display'])
-            if t == 'known':
-                return (1, v['display'])
-            return (2, v['display'])
-        files.sort(key=sort_key)
         return jsonify(files)
 
     @_web_app.route('/api/thumb/<filename>')

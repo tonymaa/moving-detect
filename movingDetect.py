@@ -55,6 +55,16 @@ def save_show_face_boxes(enabled: bool) -> None:
     config = load_config()
     config['show_face_boxes'] = enabled
     save_config(config)
+
+
+def get_show_camera() -> bool:
+    return load_config().get('show_camera', True)
+
+
+def save_show_camera(enabled: bool) -> None:
+    config = load_config()
+    config['show_camera'] = enabled
+    save_config(config)
 _cached_cameras = None
 
 

@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk, ImageEnhance
 import pystray
-from movingDetect import App, list_cameras, get_camera_index, save_camera_index, load_config, get_recording_duration, save_recording_duration, get_show_face_boxes, save_show_face_boxes
+from movingDetect import App, list_cameras, get_camera_index, save_camera_index, load_config, get_recording_duration, save_recording_duration, get_show_face_boxes, save_show_face_boxes, get_show_camera, save_show_camera
 import webbrowser
 import web_server
 from enum import Enum
@@ -113,6 +113,9 @@ class LockScreen:
 
         self.toggle_video_btn = tk.Button(bottom_frame, text="隐藏画面", command=self.toggle_video)
         self.toggle_video_btn.pack()
+        if not get_show_camera():
+            self.video_label.pack_forget()
+            self.toggle_video_btn.configure(text="显示画面")
         self.toggle_detect_btn = tk.Button(bottom_frame, text= "关闭检测" if self.monitor_camera.enable_detect else "开启检测", command=self.toggle_detect)
         self.toggle_detect_btn.pack()
 
@@ -166,9 +169,11 @@ class LockScreen:
         if self.video_label.winfo_ismapped():
             self.video_label.pack_forget()
             self.toggle_video_btn.configure(text="显示画面")
+            save_show_camera(False)
         else:
             self.video_label.pack(fill=tk.BOTH, expand=True)
             self.toggle_video_btn.configure(text="隐藏画面")
+            save_show_camera(True)
 
     def _get_selected_camera_index(self) -> int:
         name = self.selected_camera.get()

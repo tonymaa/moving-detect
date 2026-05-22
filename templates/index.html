@@ -86,9 +86,14 @@ select { padding: 8px 12px; border-radius: 8px; border: 1px solid #0f3460; backg
 <div class="container">
     <!-- Live Stream -->
     <div class="card">
-        <div class="card-title">实时画面</div>
-        <div class="stream-wrap">
-            <img id="liveStream" src="/api/stream" alt="live">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">实时画面
+            <button id="closeStreamBtn" class="btn btn-danger" style="padding:2px 10px;font-size:12px;display:none;" onclick="closeStream(event)">关闭画面</button>
+        </div>
+        <div class="stream-wrap" id="streamWrap" style="position:relative;cursor:pointer;min-height:270px;" onclick="revealStream()">
+            <img id="liveStream" src="" alt="live" style="display:none;">
+            <div id="streamCover" style="position:absolute;top:0;left:0;right:0;bottom:0;background:#000;display:flex;align-items:center;justify-content:center;color:#888;font-size:16px;">
+                点击查看实时画面
+            </div>
         </div>
     </div>
 
@@ -318,6 +323,25 @@ function updateUI() {
     toggleBtn.textContent = detecting ? '关闭检测' : '开启检测';
     toggleBtn.className = 'btn ' + (detecting ? 'btn-danger' : 'btn-success');
     detectStatus.textContent = detecting ? '运行中' : '已停止';
+}
+
+function revealStream() {
+    var img = document.getElementById('liveStream');
+    var cover = document.getElementById('streamCover');
+    img.src = '/api/stream';
+    img.style.display = 'block';
+    cover.style.display = 'none';
+    document.getElementById('closeStreamBtn').style.display = 'inline-block';
+}
+
+function closeStream(e) {
+    e.stopPropagation();
+    var img = document.getElementById('liveStream');
+    var cover = document.getElementById('streamCover');
+    img.src = '';
+    img.style.display = 'none';
+    cover.style.display = 'flex';
+    document.getElementById('closeStreamBtn').style.display = 'none';
 }
 
 function toggleDetect() {
