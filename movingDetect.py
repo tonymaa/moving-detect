@@ -7,6 +7,9 @@ import threading
 import logging
 import requests
 import json
+import wave
+import shutil
+import subprocess
 from datetime import datetime
 
 CONFIG_FILE = 'config.json'
@@ -64,6 +67,79 @@ def list_cameras(max_test: int = 5) -> list[dict]:
 
 def get_cached_cameras() -> list[dict]:
     return list_cameras()
+
+
+class AudioRecorder:
+    def __init__(self, output_path):
+        self.output_path = output_path
+        self._stop_event = threading.Event()
+        self._thread = None
+        self._frames = []
+
+    def start(self):
+        self._stop_event.clear()
+        self._frames = []
+        self._thread = threading.Thread(target=self._record, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._stop_event.set()
+        if self._thread:
+            self._thread.join(timeout=3)
+
+    def _record(self):
+        try:
+            import pyaudio
+        except ImportError:
+            return
+        p = pyaudio.PyAudio()
+        try:
+            stream = p.open(format=pyaudio.paInt16, channels=1, rate=44100,
+                            input=True, frames_per_buffer=1024)
+        except Exception as e:
+            logger.warning(f"无法打开音频设备: {e}")
+            p.terminate()
+            return
+        while not self._stop_event.is_set():
+            try:
+                data = stream.read(1024, exception_on_overflow=False)
+                self._frames.append(data)
+            except Exception:
+                break
+        stream.stop_stream()
+        stream.close()
+        p.terminate()
+        if self._frames:
+            wf = wave.open(self.output_path, 'wb')
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(44100)
+            wf.writeframes(b''.join(self._frames))
+            wf.close()
+
+
+def _mux_audio_video(video_path, audio_path):
+    output_path = video_path + '.tmp.avi'
+    ffmpeg = shutil.which('ffmpeg')
+    if not ffmpeg:
+        logger.warning("未找到ffmpeg，保留纯视频")
+        if os.path.exists(audio_path):
+            os.remove(audio_path)
+        return
+    try:
+        subprocess.run([
+            ffmpeg, '-y', '-i', video_path, '-i', audio_path,
+            '-c', 'copy', '-shortest', output_path
+        ], check=True, capture_output=True)
+        os.replace(output_path, video_path)
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        logger.warning(f"音频合成失败，保留纯视频: {e}")
+        if os.path.exists(output_path):
+            os.remove(output_path)
+    finally:
+        if os.path.exists(audio_path):
+            os.remove(audio_path)
+
 
 # 设置日志记录
 log_dir = './logs'
@@ -195,6 +271,9 @@ class App:
                             out = cv2.VideoWriter(video_filename, fourcc, 20.0, (frame2.shape[1], frame2.shape[0]))
                             thumb_path = os.path.join(self.video_dir, base_name + ".jpg")
                             cv2.imwrite(thumb_path, frame2)
+                            audio_path = os.path.join(self.video_dir, base_name + ".wav")
+                            audio_recorder = AudioRecorder(audio_path)
+                            audio_recorder.start()
                             start_time = time.time()
 
                 if recording:
@@ -202,7 +281,9 @@ class App:
                     if time.time() - start_time >= get_recording_duration() or not self.enable_detect:
                         recording = False
                         out.release()
+                        audio_recorder.stop()
                         logger.info(f"视频录制完成: {video_filename}")
+                        threading.Thread(target=_mux_audio_video, args=(video_filename, audio_path), daemon=True).start()
 
                 gray1 = gray2
 
@@ -223,6 +304,8 @@ class App:
         cap.release()
         if recording:
             out.release()
+            audio_recorder.stop()
+            threading.Thread(target=_mux_audio_video, args=(video_filename, audio_path), daemon=True).start()
         logger.info("检测结束.")
 
 if __name__ == "__main__":
