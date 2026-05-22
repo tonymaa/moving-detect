@@ -150,7 +150,9 @@ select { padding: 8px 12px; border-radius: 8px; border: 1px solid #0f3460; backg
 
     <!-- Video History -->
     <div class="card">
-        <div class="card-title">历史视频</div>
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">历史视频
+            <button class="btn btn-primary" style="padding:4px 10px;font-size:12px;" onclick="doCleanup()">清理无效记录</button>
+        </div>
         <div id="videoList" class="video-list">
             <div class="empty-msg">加载中...</div>
         </div>
@@ -473,6 +475,12 @@ function showPersonVideos(id, name) {
 
 function closePersonModal() {
     document.getElementById('personModal').classList.remove('show');
+}
+
+function doCleanup() {
+    fetch('/api/cleanup', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => { alert('清理完成：删除 ' + d.removed_videos + ' 条视频记录，' + d.removed_persons + ' 个孤立人脸'); loadVideos(); loadPersons(); });
 }
 
 function deletePerson(id) {

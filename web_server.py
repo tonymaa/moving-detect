@@ -191,6 +191,12 @@ def create_web_app(detect_app):
             result.append({'filename': f, 'display': display, 'thumb': has_thumb})
         return jsonify(result)
 
+    @_web_app.route('/api/cleanup', methods=['POST'])
+    def cleanup():
+        import face_db
+        result = face_db.cleanup_orphan_records(_web_app.detect_app.video_dir)
+        return jsonify(result)
+
     @_web_app.route('/api/cameras')
     def cameras():
         from movingDetect import get_cached_cameras

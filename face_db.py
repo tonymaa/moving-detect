@@ -175,4 +175,30 @@ def delete_person(person_id: int):
     conn.close()
 
 
+def cleanup_orphan_records(video_dir: str = './video') -> dict:
+    conn = _conn()
+    video_faces = conn.execute("SELECT DISTINCT video_filename FROM video_faces").fetchall()
+    removed_videos = 0
+    for r in video_faces:
+        if not os.path.exists(os.path.join(video_dir, r['video_filename'])):
+            conn.execute("DELETE FROM video_faces WHERE video_filename = ?", (r['video_filename'],))
+            removed_videos += 1
+    orphans = conn.execute("""
+        SELECT p.id FROM persons p
+        LEFT JOIN face_encodings fe ON fe.person_id = p.id
+        LEFT JOIN video_faces vf ON vf.person_id = p.id
+        WHERE fe.id IS NULL AND vf.id IS NULL
+    """).fetchall()
+    removed_persons = len(orphans)
+    for o in orphans:
+        person = conn.execute("SELECT photo_path FROM persons WHERE id = ?", (o['id'],)).fetchone()
+        if person and person['photo_path'] and os.path.exists(person['photo_path']):
+            os.remove(person['photo_path'])
+        conn.execute("DELETE FROM persons WHERE id = ?", (o['id'],))
+    conn.commit()
+    conn.close()
+    return {'removed_videos': removed_videos, 'removed_persons': removed_persons}
+
+
 init_db()
+cleanup_orphan_records()
