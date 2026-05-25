@@ -85,6 +85,16 @@ def save_trigger_person_ids(ids: list[int]) -> None:
     config = load_config()
     config['trigger_person_ids'] = ids
     save_config(config)
+
+
+def get_exclude_person_ids() -> list[int]:
+    return load_config().get('exclude_person_ids', [])
+
+
+def save_exclude_person_ids(ids: list[int]) -> None:
+    config = load_config()
+    config['exclude_person_ids'] = ids
+    save_config(config)
 _cached_cameras = None
 
 
@@ -369,9 +379,12 @@ class App:
 
                             if record_mode in ('face', 'new_face', 'specific_face'):
                                 should_record = False
+                                exclude_ids = get_exclude_person_ids()
                                 with self._frame_lock:
                                     boxes = list(self._face_boxes)
                                 for top, right, bottom, left, label, pid in boxes:
+                                    if pid in exclude_ids:
+                                        continue
                                     if record_mode == 'face':
                                         should_record = True
                                         break

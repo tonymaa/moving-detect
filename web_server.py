@@ -88,7 +88,7 @@ def create_web_app(detect_app):
     def status():
         ls = getattr(_web_app.detect_app, '_lock_screen', None)
         mode = ls.mode if ls else None
-        from movingDetect import get_recording_duration, get_show_face_boxes, get_record_mode, get_trigger_person_ids
+        from movingDetect import get_recording_duration, get_show_face_boxes, get_record_mode, get_trigger_person_ids, get_exclude_person_ids
         return jsonify({
             'detecting': _web_app.detect_app.enable_detect,
             'camera_index': _web_app.detect_app._camera_idx if hasattr(_web_app.detect_app, '_camera_idx') else 0,
@@ -96,7 +96,8 @@ def create_web_app(detect_app):
             'recording_duration': get_recording_duration(),
             'show_face_boxes': get_show_face_boxes(),
             'record_mode': get_record_mode(),
-            'trigger_person_ids': get_trigger_person_ids()
+            'trigger_person_ids': get_trigger_person_ids(),
+            'exclude_person_ids': get_exclude_person_ids()
         })
 
     @_web_app.route('/api/set_recording_duration', methods=['POST'])
@@ -132,6 +133,14 @@ def create_web_app(detect_app):
         ids = data.get('ids', [])
         save_trigger_person_ids([int(i) for i in ids])
         return jsonify({'trigger_person_ids': ids})
+
+    @_web_app.route('/api/set_exclude_persons', methods=['POST'])
+    def set_exclude_persons():
+        from movingDetect import save_exclude_person_ids
+        data = request.get_json(force=True)
+        ids = data.get('ids', [])
+        save_exclude_person_ids([int(i) for i in ids])
+        return jsonify({'exclude_person_ids': ids})
 
     @_web_app.route('/api/toggle_detect', methods=['POST'])
     def toggle_detect():

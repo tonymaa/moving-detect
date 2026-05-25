@@ -146,6 +146,10 @@ select { padding: 8px 12px; border-radius: 8px; border: 1px solid #0f3460; backg
                 <div style="font-size:12px;color:#888;margin-bottom:6px;">选择触发录制的人脸：</div>
                 <div id="triggerPersonList"></div>
             </div>
+            <div id="excludePersonPanel" style="display:none;border:1px solid #0f3460;border-radius:8px;padding:8px;max-height:120px;overflow-y:auto;">
+                <div style="font-size:12px;color:#888;margin-bottom:6px;">排除以下人脸（不触发录制）：</div>
+                <div id="excludePersonList"></div>
+            </div>
             <div style="font-size:13px;color:#888;margin-top:4px;">
                 当前状态：<span id="detectStatus">未知</span>
                 <span id="modeStatus" style="margin-left:8px;"></span>
@@ -234,6 +238,7 @@ const logoutBtn = document.getElementById('logoutBtn');
 
 let showFaceBoxes = false;
 let triggerPersonIds = [];
+let excludePersonIds = [];
 
 function updateModeUI() {
     if (currentMode === 'ScreenSaver') {
@@ -263,6 +268,7 @@ fetch('/api/status').then(r => r.json()).then(d => {
     if (d.recording_duration) durationInput.value = d.recording_duration;
     if (d.record_mode) document.getElementById('recordModeSelect').value = d.record_mode;
     if (d.trigger_person_ids) triggerPersonIds = d.trigger_person_ids;
+    if (d.exclude_person_ids) excludePersonIds = d.exclude_person_ids;
     updateUI();
     updateTriggerPanel();
     updateModeUI();
@@ -419,7 +425,9 @@ function loadPersons() {
     fetch('/api/persons').then(r => r.json()).then(persons => {
         allPersons = persons;
         renderFaces();
-        if (document.getElementById('recordModeSelect').value === 'specific_face') renderTriggerPersons();
+        var mode = document.getElementById('recordModeSelect').value;
+        if (mode === 'specific_face') renderTriggerPersons();
+        if (mode === 'face' || mode === 'new_face') renderExcludePersons();
     });
 }
 loadPersons();
@@ -513,13 +521,20 @@ function saveRecordMode() {
 
 function updateTriggerPanel() {
     var mode = document.getElementById('recordModeSelect').value;
-    var panel = document.getElementById('triggerPersonPanel');
-    if (mode !== 'specific_face') {
-        panel.style.display = 'none';
-        return;
+    var triggerPanel = document.getElementById('triggerPersonPanel');
+    var excludePanel = document.getElementById('excludePersonPanel');
+    if (mode === 'specific_face') {
+        triggerPanel.style.display = 'block';
+        excludePanel.style.display = 'none';
+        renderTriggerPersons();
+    } else if (mode === 'face' || mode === 'new_face') {
+        triggerPanel.style.display = 'none';
+        excludePanel.style.display = 'block';
+        renderExcludePersons();
+    } else {
+        triggerPanel.style.display = 'none';
+        excludePanel.style.display = 'none';
     }
-    panel.style.display = 'block';
-    renderTriggerPersons();
 }
 
 function renderTriggerPersons() {
@@ -555,6 +570,45 @@ function onTriggerPersonChange() {
     checkboxes.forEach(function(cb) { if (cb.checked) ids.push(parseInt(cb.value)); });
     triggerPersonIds = ids;
     fetch('/api/set_trigger_persons', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ids: ids})
+    });
+}
+
+function renderExcludePersons() {
+    var list = document.getElementById('excludePersonList');
+    if (!allPersons.length) {
+        list.innerHTML = '<span style="font-size:12px;color:#555;">暂无人脸数据</span>';
+        return;
+    }
+    list.innerHTML = '';
+    allPersons.forEach(function(p) {
+        var label = document.createElement('label');
+        label.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 0;font-size:13px;cursor:pointer;';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = p.id;
+        cb.checked = excludePersonIds.indexOf(p.id) >= 0;
+        cb.onchange = function() { onExcludePersonChange(); };
+        label.appendChild(cb);
+        var img = document.createElement('img');
+        img.src = '/api/persons/' + p.id + '/photo';
+        img.style.cssText = 'width:24px;height:24px;border-radius:50%;object-fit:cover;';
+        label.appendChild(img);
+        var span = document.createElement('span');
+        span.textContent = p.name || '未命名 #' + p.id;
+        label.appendChild(span);
+        list.appendChild(label);
+    });
+}
+
+function onExcludePersonChange() {
+    var checkboxes = document.querySelectorAll('#excludePersonList input[type=checkbox]');
+    var ids = [];
+    checkboxes.forEach(function(cb) { if (cb.checked) ids.push(parseInt(cb.value)); });
+    excludePersonIds = ids;
+    fetch('/api/set_exclude_persons', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ids: ids})
